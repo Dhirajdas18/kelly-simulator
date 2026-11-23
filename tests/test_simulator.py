@@ -42,3 +42,11 @@ def test_browser_simulation_grows_at_the_formula_rate_and_is_repeatable():
                " return [s.typical, a[3][500] === b[3][500], a.length, a[0].length]; })()")
     assert np.log(js[0]) / 1000 == pytest.approx(growth_rate(0.1, 0.55, 1), rel=0.05)
     assert js[1] is True and js[2:] == [4000, 1001]
+
+
+def test_browser_continuous_kelly_matches_python():
+    from ks.stock import growth_continuous, kelly_continuous
+
+    js = _node("[m.kellyContinuous(0.15, 0.2, 0.065), m.growthContinuous(1.5, 0.15, 0.2, 0.065)]")
+    assert js == pytest.approx([kelly_continuous(0.15, 0.2, 0.065),
+                                growth_continuous(1.5, 0.15, 0.2, 0.065)], rel=1e-12)

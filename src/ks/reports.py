@@ -4,6 +4,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 
 from ks import plots
 from ks.bets import growth_rate, halving_probability, kelly_fraction, simulate, summarise
@@ -91,4 +92,135 @@ def report_bets(out_dir: Path) -> dict:
     }
 
 
-REPORTS = {"bets": report_bets}
+RF = 0.065  # assumed risk-free rate (India 91-day T-bills ran roughly 3-7% over 2009-2026)
+START = "2009-01-02"  # first day the NIFTY ETF trades on Yahoo
+
+
+def returns() -> pd.DataFrame:
+    from ks.data import DATA_PATH, daily_returns
+
+    return daily_returns(pd.read_parquet(DATA_PATH)["adj_close"])
+
+
+def stock_table(R: pd.DataFrame, start: str = START, min_years: float = 3) -> pd.DataFrame:
+    """In-sample annual mean, volatility and Kelly fraction for every stock since `start`."""
+    from ks.data import SYMBOLS
+    from ks.stock import annual_stats, kelly_continuous
+
+    rows = {}
+    for sym in SYMBOLS:
+        r = R[sym].loc[start:].dropna()
+        if len(r) < 2:
+            continue
+        s = annual_stats(r)
+        if s["years"] >= min_years:
+            rows[sym] = {"mu": s["mu"], "sigma": s["sigma"], "years": s["years"],
+                         "kelly": kelly_continuous(s["mu"], s["sigma"], RF)}
+    return pd.DataFrame(rows).T.astype(float).sort_values("kelly")
+
+
+def report_stock(out_dir: Path) -> dict:
+    """Continuous Kelly on the NIFTY ETF, the NIFTY index and today's NIFTY 50 stocks."""
+    from ks.stock import (
+        annual_stats,
+        growth_continuous,
+        kelly_continuous,
+        levered_growth,
+        rolling_kelly,
+    )
+
+    R = returns()
+    series = {"NIFTY ETF, Jan 2009–": R["NIFTYBEES"].loc[START:].dropna(),
+              "NIFTY index (no dividends), Sep 2007–": R["NIFTY"].dropna()}
+    stats = {k: annual_stats(r) for k, r in series.items()}
+    fstar = {k: kelly_continuous(s["mu"], s["sigma"], RF) for k, s in stats.items()}
+
+    fig, ax = plt.subplots(figsize=(9, 4.8))
+    fs = np.linspace(0, 6, 61)
+    for (k, r), c in zip(series.items(), (plots.SERIES[0], plots.SERIES[1]), strict=True):
+        s = stats[k]
+        real = [levered_growth(r, f, RF) for f in fs]
+        ax.plot(fs, np.array(real) * 100, color=c, lw=2, label=f"{k}: realised")
+        ax.plot(fs, growth_continuous(fs, s["mu"], s["sigma"], RF) * 100, color=c, lw=1.2,
+                ls="--", label=f"{k}: formula")
+        ax.plot([fstar[k]], [levered_growth(r, fstar[k], RF) * 100], "o", ms=7, color=c)
+    ax.axhline(np.log(1 + RF) * 100, color=plots.TEXT_2, lw=0.8, ls=":")
+    ax.text(5.9, np.log(1 + RF) * 100 + 0.4, "cash, 6.5%", ha="right", fontsize=8,
+            color=plots.TEXT_2)
+    ax.set_ylim(-6, 20)
+    ax.set_xlabel("fraction of wealth in NIFTY (above 1 = borrowing at 6.5%), rebalanced daily")
+    ax.set_ylabel("growth per year, % (log)")
+    ax.legend(loc="lower left", fontsize=8)
+    k1, k2 = list(series)
+    ax.set_title(f"With hindsight, Kelly said {fstar[k1]:.1f}× NIFTY from 2009 "
+                 f"but {fstar[k2]:.1f}× from 2007")
+    plots.save(fig, out_dir, "stock_growth")
+
+    tab = stock_table(R)
+    fig, ax = plt.subplots(figsize=(9, 5))
+    sig = np.linspace(0.1, 0.52, 100)
+    for f in (1, 2, 3):
+        ax.plot(sig * 100, f * sig**2 * 100, color=plots.MUTED, lw=1, ls="--")
+        x = 0.50 if f == 1 else (0.44 / f) ** 0.5  # where the line is labelled, inside the frame
+        ax.text(x * 100 - 0.6, f * x**2 * 100 + 1, f"Kelly {f}×", fontsize=8,
+                color=plots.TEXT_2, ha="right")
+    order = tab.sort_values("sigma")
+    ax.plot(order["sigma"] * 100, (order["mu"] - RF) * 100, "o", ms=6, color=plots.SERIES[0],
+            label="today's NIFTY 50 stocks, 2009– (or listing)")
+    n = stats[k1]
+    ax.plot([n["sigma"] * 100], [(n["mu"] - RF) * 100], "D", ms=8, color=plots.SERIES[1],
+            label="NIFTY ETF")
+    for sym in ("BAJFINANCE", "EICHERMOT", "HDFCBANK", "ONGC", "NTPC", "JIOFIN", "ADANIENT"):
+        if sym in tab.index:
+            ax.annotate(sym, (tab.loc[sym, "sigma"] * 100, (tab.loc[sym, "mu"] - RF) * 100),
+                        xytext=(5, 3), textcoords="offset points", fontsize=7,
+                        color=plots.TEXT_2)
+    ax.axhline(0, color=plots.TEXT_2, lw=0.8)
+    ax.set_xlim(10, 52)
+    ax.set_ylim(-10, 50)
+    ax.set_xlabel("volatility, % a year")
+    ax.set_ylabel("average return above 6.5% cash, % a year")
+    ax.legend(loc="upper left", fontsize=8)
+    lev = int((tab["kelly"] > 1).sum())
+    ax.set_title(f"With hindsight, Kelly would have borrowed to buy {lev} of today's "
+                 f"{len(tab)} NIFTY stocks")
+    plots.save(fig, out_dir, "stock_fstar")
+
+    roll = {k: rolling_kelly(r, RF, years=3) for k, r in series.items()}
+    fig, ax = plt.subplots(figsize=(9, 4.6))
+    for (k, rk), c in zip(roll.items(), (plots.SERIES[0], plots.SERIES[1]), strict=True):
+        rk = rk.dropna()
+        ax.plot(rk.index, rk.values, color=c, lw=1.5, label=k)
+    ax.axhline(1, color=plots.TEXT_2, lw=0.8, ls="--")
+    ax.axhline(0, color=plots.TEXT_2, lw=0.8)
+    ax.set_ylabel("Kelly fraction from the past 3 years")
+    ax.legend(loc="upper left", fontsize=8)
+    e = roll[k1].dropna()
+    ax.set_title(f"Three years of data put NIFTY's Kelly fraction anywhere from "
+                 f"{e.min():.1f} to {e.max():.1f}")
+    plots.save(fig, out_dir, "stock_rolling")
+
+    return {
+        "stats": {k: {"mu": f"{s['mu']:.1%}", "sigma": f"{s['sigma']:.1%}",
+                      "Sharpe": round((s["mu"] - RF) / s["sigma"], 2),
+                      "years": round(s["years"], 1),
+                      "Kelly": round(fstar[k], 2)} for k, s in stats.items()},
+        "realised growth at 0 / 0.5 / 1 / f* / 2f* (%/yr)": {
+            k: [round(levered_growth(r, f, RF) * 100, 1)
+                for f in (0, 0.5, 1, fstar[k] / 2, fstar[k], 2 * fstar[k])]
+            for k, r in series.items()},
+        "formula growth at f* (%/yr)": {k: round(growth_continuous(
+            fstar[k], stats[k]["mu"], stats[k]["sigma"], RF) * 100, 1) for k in series},
+        "stocks: count, Kelly > 1, 0-1, < 0": (len(tab), int((tab.kelly > 1).sum()),
+                                               int(tab.kelly.between(0, 1).sum()),
+                                               int((tab.kelly < 0).sum())),
+        "stocks Kelly quartiles": tab.kelly.quantile([0, 0.25, 0.5, 0.75, 1]).round(2).tolist(),
+        "rolling 3y NIFTY ETF Kelly: min, max, share of days < 0, share > 2": (
+            round(e.min(), 2), round(e.max(), 2), f"{(e < 0).mean():.0%}", f"{(e > 2).mean():.0%}",
+            f"min on {e.idxmin():%b %Y}, max on {e.idxmax():%b %Y}"),
+        "worst NIFTY ETF day; leverage that would wipe out": (
+            f"{series[k1].min():.1%}", round(-1 / series[k1].min(), 1)),
+    }
+
+
+REPORTS = {"bets": report_bets, "stock": report_stock}

@@ -1,14 +1,15 @@
-"""Build site/index.html (the simulator needs no data; later topics add NSE charts)."""
+"""Build site/index.html from data/prices.parquet."""
 
 from pathlib import Path
 
+from ks.reports import returns
 from ks.site import build_html
 
 
 def main() -> None:
     out = Path("site/index.html")
     out.parent.mkdir(exist_ok=True)
-    out.write_text(build_html(), encoding="utf-8")
+    out.write_text(build_html(returns()), encoding="utf-8")
     print(f"{out} ({out.stat().st_size / 1e6:.1f} MB)")
 
 

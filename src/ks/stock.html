@@ -1,0 +1,50 @@
+<form class="calc" id="stock" onsubmit="return false">
+  <label>Holding <select id="st-sym"></select></label>
+  <label>Window <select id="st-win">
+    <option value="1y">last year</option><option value="3y">last 3 years</option><option value="5y" selected>last 5 years</option><option value="2009">since 2009</option>
+  </select></label>
+</form>
+<p class="note" id="st-note" aria-live="polite"></p>
+<div class="table-scroll"><table class="data">
+  <thead><tr><th scope="col">Fraction in the holding</th><th scope="col">Expected growth a year</th></tr></thead>
+  <tbody id="st-out"></tbody>
+</table></div>
+<div id="st-chart" class="sim-chart" role="img" aria-label="Growth a year against the fraction held"></div>
+<script>
+(() => {
+  const D = $data, el = (id) => document.getElementById(id);
+  const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  const sym = el("st-sym");
+  sym.innerHTML = D.symbols.map((s) => `<option value="${s}">${D.labels[s] || s}</option>`).join("");
+  const pct = (x) => (x * 100).toFixed(1) + "%";
+  const update = () => {
+    const st = D.stats[sym.value][el("st-win").value];
+    if (!st) { el("st-out").innerHTML = ""; Plotly.purge("st-chart"); el("st-note").textContent = "Not enough history in this window for this holding."; return; }
+    const [mu, sigma] = st, rf = D.rf, k = kellyContinuous(mu, sigma, rf);
+    el("st-note").textContent = `Average return ${pct(mu)} a year, volatility ${pct(sigma)}, cash ${pct(rf)}; ` +
+      `Sharpe ratio ${((mu - rf) / sigma).toFixed(2)}. Kelly’s fraction: ${k.toFixed(2)}` +
+      (k <= 0 ? " — no edge over cash in this window: Kelly holds none." : k > 1 ? ` — borrow to hold ${k.toFixed(1)}× your money.` : ".") +
+      ` Data to ${D.last}.`;
+    const rows = [["None (all cash)", 0], ["Half Kelly", k / 2], ["Fully invested", 1], ["Kelly", k], ["Double Kelly", 2 * k]]
+      .filter(([, f], i, a) => f >= 0 && a.findIndex(([, g]) => Math.abs(g - f) < 1e-9) === i);
+    el("st-out").innerHTML = rows.map(([n, f]) => `<tr><th scope="row">${n}: ${f.toFixed(2)}</th><td>${pct(growthContinuous(f, mu, sigma, rf))}</td></tr>`).join("");
+    const top = Math.max(3, Math.min(10, 2.4 * k)), xs = [], ys = [];
+    for (let f = 0; f <= top + 1e-9; f += top / 120) { xs.push(f); ys.push(growthContinuous(f, mu, sigma, rf) * 100); }
+    const g0 = rf * 100, gk = growthContinuous(Math.max(k, 0), mu, sigma, rf) * 100;
+    Plotly.react("st-chart", [
+      { x: xs, y: ys, mode: "lines", line: { color: css("--accent"), width: 2 }, name: "growth a year", hovertemplate: "fraction %{x:.2f}: %{y:.1f}% a year<extra></extra>" },
+      { x: [0, Math.max(k, 0)], y: [g0, gk], mode: "markers", marker: { color: css("--text"), size: 9 }, name: "cash and Kelly", hovertemplate: "fraction %{x:.2f}: %{y:.1f}% a year<extra></extra>" },
+    ], {
+      paper_bgcolor: css("--surface"), plot_bgcolor: css("--surface"),
+      font: { family: getComputedStyle(document.body).fontFamily, color: css("--text-2"), size: 13 },
+      margin: { l: 56, r: 16, t: 32, b: 48 }, legend: { orientation: "h", y: 1.02, yanchor: "bottom", x: 0 },
+      xaxis: { title: "fraction of wealth in the holding", gridcolor: css("--grid"), zeroline: false },
+      yaxis: { title: "expected growth a year, %", gridcolor: css("--grid"), zeroline: false, range: [Math.min(-5, g0 - 8), Math.max(gk, g0) + 4] },
+      hovermode: "closest",
+    }, { displaylogo: false, responsive: true });
+  };
+  el("stock").addEventListener("change", update);
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", update);
+  update();
+})();
+</script>

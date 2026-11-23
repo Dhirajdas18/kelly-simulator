@@ -48,4 +48,8 @@ function quantile(sorted, q) {  // numpy's default (linear interpolation)
   return lo + 1 < sorted.length ? sorted[lo] + f * (sorted[lo + 1] - sorted[lo]) : sorted[lo];
 }
 
-if (typeof module !== "undefined") module.exports = { kellyFraction, growthRate, simulate, summarise, quantile, median };
+// Kelly for a stock (mirrors src/ks/stock.py): fraction f in the stock, the rest in cash at rf.
+function kellyContinuous(mu, sigma, rf) { return (mu - rf) / (sigma * sigma); }
+function growthContinuous(f, mu, sigma, rf) { return rf + f * (mu - rf) - f * f * sigma * sigma / 2; }
+
+if (typeof module !== "undefined") module.exports = { kellyFraction, growthRate, simulate, summarise, quantile, median, kellyContinuous, growthContinuous };
