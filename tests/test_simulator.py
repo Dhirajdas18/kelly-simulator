@@ -75,3 +75,11 @@ def test_browser_kelly_spread_matches_python():
     cases = [(0.139, 0.165), (0.10, 0.20), (0.40, 0.20), (0.03, 0.2)]
     js = _node("[" + ",".join(f"m.kellySpread({a}, {b}, 0.065, 0.146)" for a, b in cases) + "]")
     assert js == pytest.approx([kelly_spread(a, b, 0.065, 0.146) for a, b in cases], rel=1e-12)
+
+
+def test_browser_recalibrate_matches_python():
+    from ks.signal import recalibrate
+
+    js = _node("[m.recalibrate(0.56, 0, 0.5), m.recalibrate(0.45, 0.02, 0.56)]")
+    assert js == pytest.approx([recalibrate(0.56, 0, 0.5), recalibrate(0.45, 0.02, 0.56)],
+                               rel=1e-12)

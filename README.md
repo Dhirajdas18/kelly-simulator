@@ -20,7 +20,7 @@ window and see what Kelly's fraction was. It runs in your browser.
 - [x] Drawdowns and time under full and fractional Kelly
 - [x] Many assets: f = Σ⁻¹(μ − r) on NIFTY, gold and the US, hindsight and walk-forward
 - [x] Margin interest, ETF trading costs and rebalancing bands; Kelly against volatility targeting
-- [ ] Sizing a trading signal from calibrated win rates and payoffs
+- [x] Sizing a trading signal: calibration of a walk-forward model on the NIFTY 50, Kelly on raw and recalibrated probabilities
 
 ## Findings
 
@@ -259,12 +259,54 @@ plus an assumed 0.05% slippage per side. Spare cash earns 6.5%.
   five years' average return grew 10.2% with a worst fall of −17%. Allowing borrowing at the margin rate
   (up to 1.5×) made volatility targeting worse on both counts.
 
+### 7. A model that overstates its edge 2× bets 2× Kelly; a real NIFTY 50 signal was that overconfident, and no sizing of it beat zero
+
+<a href="docs/img/sig_reliability.png"><picture><source media="(prefers-reduced-motion: reduce)" srcset="docs/img/sig_reliability.png"><img src="docs/img/sig_reliability.gif" alt="Predicted against actual chance of beating the median for a walk-forward stock model, raw and recalibrated" width="720"></picture></a>
+
+Kelly needs the true chance of winning; a model supplies an estimate. For an even-money bet Kelly stakes
+2p − 1, so a model whose probabilities sit twice as far from 50% as the truth stakes twice Kelly. If the
+truth is 53%, Kelly stakes 6% and grows 1.80 thousandths per bet; a model saying 56% stakes 12% and grows
+at −0.02, and one saying 60% at −8.2 (chart below, left). Calibration measures the problem: fit
+P(win) = sigmoid(a + slope · logit(p)) on past predictions. A slope of 1 is calibrated; below 1, the model
+is overconfident by about 1/slope.
+
+The signal: each month end since 2010, for today's NIFTY 50 stocks, the chance a stock beats the median of
+the same stocks next month, from a logistic model of three ranks: 12-to-1-month momentum, last month's
+return and 60-day volatility, refitted every month on earlier months only (9,212 stock-months; out of sample
+from January 2013, 7,698 predictions). The bar is the median of the same stocks, so the survivors'
+outperformance cancels out of the label (49.4% of stock-months beat it).
+
+- **Overconfident (top):** out-of-sample calibration slope 0.56. The tenth of predictions averaging 54.9%
+  beat the median 52.3% of the time; the bottom tenth, 43.3%, did so 48.5% of the time. Recalibrating each
+  month on earlier predictions only pulled them toward 50% (top tenth 53.2%). The walk-forward slope ranged
+  from 0.46 to 1.22 as it was re-estimated.
+- **Almost no skill:** the Brier score was 0.24983, against 0.24997 for always predicting the base rate.
+
+<table><tr>
+<td><a href="docs/img/sig_theory.png"><picture><source media="(prefers-reduced-motion: reduce)" srcset="docs/img/sig_theory.png"><img src="docs/img/sig_theory.gif" alt="Growth per even-money bet against the stated win probability when the truth is 53 percent"></picture></a></td>
+<td><a href="docs/img/sig_sizing.png"><picture><source media="(prefers-reduced-motion: reduce)" srcset="docs/img/sig_sizing.png"><img src="docs/img/sig_sizing.gif" alt="Realised growth per bet with 90 percent ranges for four ways of sizing the signal's bets"></picture></a></td>
+</tr></table>
+
+Sizing (right): every stock-month from 2014 to November 2026 treated as an even-money bet on beating the
+median (win the stake or lose it), staked by Kelly when the probability is above 50%, scored on what
+actually happened. Ranges are 90% bootstraps over whole months, since a month's bets move together.
+
+| 7,182 bets, 2014–2026 | Growth per bet, thousandths (90% range) | Average stake | Bets placed |
+|---|---|---|---|
+| Kelly on the model's p | −0.18 (−0.93 to 0.63) | 1.9% | 40% |
+| ½ Kelly on the model's p | +0.09 (−0.29 to 0.47) | 1.0% | 40% |
+| Kelly on recalibrated p | −0.08 (−0.57 to 0.41) | 1.1% | 36% |
+| ½ Kelly on recalibrated p | +0.03 (−0.21 to 0.29) | 0.6% | 36% |
+
+- **Nothing to size:** every range includes zero. Recalibration and halving shrank the stakes and the swings
+  (the range narrowed from 1.56 to 0.50 thousandths) but couldn't create an edge the model didn't have.
+
 ## Quick start
 
 ```bash
 uv sync
 uv run python scripts/fetch_data.py         # Yahoo Finance -> data/prices.parquet
-uv run ks report bets                       # also: stock, estimation, drawdown, multi, frictions
+uv run ks report bets                       # also: stock, estimation, drawdown, multi, frictions, signal
 uv run python scripts/build_site.py         # simulator -> site/index.html
 uv run pytest
 ```
@@ -283,7 +325,9 @@ uv run pytest
   leverage cap, and a monthly walk-forward on weekly returns.
 - `src/ks/frictions.py`: Kelly with a borrowing spread, Zerodha ETF and MTF costs, EWMA volatility
   forecasts, and a daily replay with drift, rebalancing bands, costs and interest.
-- `src/ks/kelly.js`, `simulator.html`, `stock.html`: the same in the browser with a seeded generator; a test runs them
+- `src/ks/signal.py`: the monthly stock panel, logistic regression, walk-forward probabilities,
+  calibration slope and recalibration, and realised growth of even-money bets.
+- `src/ks/kelly.js`, `simulator.html`, `stock.html`, `signal.html`: the same in the browser with a seeded generator; a test runs them
   through Node against Python.
 - `src/ks/data.py`: Yahoo prices for today's NIFTY 50, the index and two ETFs since 2007, with known errors
   repaired from `docs/data/yahoo_fixes.csv`; the S&P 500 total-return index and USD/INR kept in a separate

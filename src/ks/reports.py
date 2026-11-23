@@ -689,5 +689,129 @@ def report_frictions(out_dir: Path) -> dict:
     }
 
 
+def report_signal(out_dir: Path) -> dict:
+    """Kelly from a model's probabilities: what overconfidence costs, and a real walk-forward."""
+    from ks.bets import growth_rate
+    from ks.data import SYMBOLS
+    from ks.signal import (
+        FEATURES,
+        calibration,
+        monthly_panel,
+        realised_growth,
+        recalibrate,
+        walk_forward_probs,
+    )
+
+    true_p = 0.53
+    fig, ax = plt.subplots(figsize=(9, 4.6))
+    stated = np.linspace(0.5, 0.6, 201)
+    ax.plot(stated * 100, growth_rate(2 * stated - 1, true_p, 1.0) * 1000, color=plots.SERIES[0],
+            lw=2)
+    for sp, lab in ((0.53, "calibrated:\nKelly"), (0.545, "1.5× Kelly"),
+                    (0.56, "twice as far\nfrom 50%: 2× Kelly")):
+        g = growth_rate(2 * sp - 1, true_p, 1.0) * 1000
+        ax.plot([sp * 100], [g], "o", ms=7, color=plots.SERIES[0])
+        ax.annotate(lab, (sp * 100, g), xytext=(0, 10), textcoords="offset points", ha="center",
+                    fontsize=8, color=plots.TEXT_2)
+    ax.axhline(0, color=plots.TEXT_2, lw=0.8)
+    ax.set_ylim(-1.5, 2.6)
+    ax.set_xlabel("win probability the model states, % (the truth is 53%, even-money bets)")
+    ax.set_ylabel("growth per bet, thousandths of log wealth")
+    ax.set_title("A model that says 56% when the truth is 53% bets 2× Kelly and grows at zero")
+    plots.save(fig, out_dir, "sig_theory")
+
+    panel = monthly_panel(returns().loc[START:], SYMBOLS)
+    preds = walk_forward_probs(panel, FEATURES, min_months=36)
+    months = sorted(preds["t"].unique())
+    rows = []
+    for i, t in enumerate(months):
+        if i < 12:  # need a year of earlier predictions to measure the calibration
+            continue
+        past = preds[preds["t"] < t]
+        a, slope = calibration(past["p"], past["y"])
+        cur = preds[preds["t"] == t].copy()
+        cur["p_cal"] = recalibrate(cur["p"], a, slope)
+        cur["slope"] = slope
+        rows.append(cur)
+    bets = pd.concat(rows, ignore_index=True)
+    a_all, slope_all = calibration(preds["p"], preds["y"])
+    stakes = {"Kelly on the model's p": np.clip(2 * bets["p"] - 1, 0, None),
+              "½ Kelly on the model's p": np.clip(bets["p"] - 0.5, 0, None),
+              "Kelly on recalibrated p": np.clip(2 * bets["p_cal"] - 1, 0, None),
+              "½ Kelly on recalibrated p": np.clip(bets["p_cal"] - 0.5, 0, None)}
+    rng = np.random.default_rng(0)
+    groups = bets.groupby("t").indices
+    keys = list(groups)
+    res = {}
+    for n, f in stakes.items():
+        g = realised_growth(f, bets["y"])
+        boot = []
+        for _ in range(1000):  # resample whole months: bets in the same month move together
+            idx = np.concatenate([groups[k] for k in rng.choice(keys, len(keys))])
+            boot.append(realised_growth(f.to_numpy()[idx], bets["y"].to_numpy()[idx]))
+        res[n] = (g, np.quantile(boot, 0.05), np.quantile(boot, 0.95), float(f.mean()),
+                  float((f > 0).mean()))
+
+    fig, ax = plt.subplots(figsize=(9, 4.8))
+    bins = pd.qcut(bets["p"], 10, labels=False)
+    rel = bets.groupby(bins).agg(p=("p", "mean"), pc=("p_cal", "mean"), hit=("y", "mean"))
+    ax.plot([40, 60], [40, 60], color=plots.TEXT_2, lw=0.8, ls="--")
+    ax.plot(rel["p"] * 100, rel["hit"] * 100, "o-", color=plots.SERIES[1], lw=1.5,
+            label="model's probability")
+    ax.plot(rel["pc"] * 100, rel["hit"] * 100, "o-", color=plots.SERIES[0], lw=1.5,
+            label="recalibrated on earlier predictions")
+    ax.set_xlim(40, 60)
+    ax.set_ylim(40, 60)
+    ax.set_xlabel("predicted chance of beating the median next month, % (tenths of predictions)")
+    ax.set_ylabel("how often it did, %")
+    ax.legend(loc="upper left", fontsize=8)
+    ax.set_title(f"Out of sample, the model's probabilities were too far from 50%: calibration "
+                 f"slope {slope_all:.2f}")
+    plots.save(fig, out_dir, "sig_reliability")
+
+    fig, ax = plt.subplots(figsize=(9, 4.6))
+    names = list(res)
+    xs = np.arange(len(names))
+    vals = [res[n][0] * 1000 for n in names]
+    err = np.array([[res[n][0] - res[n][1], res[n][2] - res[n][0]] for n in names]).T * 1000
+    ax.bar(xs, vals, 0.55, color=[plots.SERIES[1], plots.SERIES[1], plots.SERIES[0],
+                                  plots.SERIES[0]], yerr=err, capsize=4,
+           error_kw=dict(ecolor=plots.TEXT_2, lw=1))
+    for i, v in enumerate(vals):
+        ax.text(i + 0.3, v, f"{v:+.2f}", va="center", fontsize=8)
+    ax.axhline(0, color=plots.TEXT_2, lw=0.8)
+    ax.set_xticks(xs, names, fontsize=8)
+    ax.set_ylabel("realised growth per bet, thousandths (90% range)")
+    ax.grid(axis="x", visible=False)
+    best = max(names, key=lambda n: res[n][0])
+    ax.set_title(f"{len(bets):,} real bets, 2014–26: the 90% ranges of all four sizings "
+                 "include zero")
+    plots.save(fig, out_dir, "sig_sizing")
+
+    return {
+        "panel": {"rows": len(panel), "months": panel["t"].nunique(),
+                  "base rate": round(float(panel["y"].mean()), 3)},
+        "out-of-sample predictions": {"rows": len(preds), "from": f"{preds['t'].min():%b %Y}",
+                                      "p 1/10/50/90/99%": preds["p"].quantile(
+                                          [0.01, 0.1, 0.5, 0.9, 0.99]).round(3).tolist()},
+        "calibration (all out-of-sample)": (round(a_all, 3), round(slope_all, 3)),
+        "walk-forward slope range": (round(float(bets["slope"].min()), 2),
+                                     round(float(bets["slope"].max()), 2)),
+        "reliability by tenth (p, recalibrated p, hit)": rel.round(3).to_dict("records"),
+        "Brier model / base rate": (round(float(((preds["p"] - preds["y"]) ** 2).mean()), 5),
+                                    round(float(((preds["y"].mean() - preds["y"]) ** 2).mean()),
+                                          5)),
+        "bets": len(bets),
+        "sizing (growth ×1000, 5%, 95%, average stake, share of bets placed)": {
+            n: (round(v[0] * 1000, 3), round(v[1] * 1000, 3), round(v[2] * 1000, 3),
+                round(v[3], 4), round(v[4], 3)) for n, v in res.items()},
+        "best": best,
+        "theory: growth ×1000 at stated 0.53/0.545/0.56/0.60, true 0.53": [
+            round(growth_rate(2 * sp - 1, true_p, 1.0) * 1000, 3)
+            for sp in (0.53, 0.545, 0.56, 0.60)],
+    }
+
+
 REPORTS = {"bets": report_bets, "stock": report_stock, "estimation": report_estimation,
-           "drawdown": report_drawdown, "multi": report_multi, "frictions": report_frictions}
+           "drawdown": report_drawdown, "multi": report_multi, "frictions": report_frictions,
+           "signal": report_signal}

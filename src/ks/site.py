@@ -21,6 +21,8 @@ HERE = Path(__file__).parent
 JS = (HERE / "kelly.js").read_text(encoding="utf-8")
 SIMULATOR = (HERE / "simulator.html").read_text(encoding="utf-8")
 STOCK = (HERE / "stock.html").read_text(encoding="utf-8")
+SIGNAL = (HERE / "signal.html").read_text(encoding="utf-8")
+SLOPE = 0.56  # the signal's out-of-sample calibration slope, 2013-2026 (ks report signal)
 LABELS = {"NIFTYBEES": "NIFTY 50 ETF (NIFTYBEES)", "GOLDBEES": "Gold ETF (GOLDBEES)"}
 WINDOWS = {"1y": 1, "3y": 3, "5y": 5, "2009": None}
 PAGE = Template((HERE / "page.html").read_text(encoding="utf-8"))
@@ -90,6 +92,11 @@ def multi_figure(data: pd.DataFrame) -> go.Figure:
     return fig
 
 
+
+def signal_section(data: pd.DataFrame) -> str:
+    return SIGNAL.replace("$slope", f"{SLOPE:g}")
+
+
 SECTIONS = [
     ("Kelly simulator",
      "A repeated bet: you win the stated amount per ₹1 staked with the chosen chance, otherwise "
@@ -108,6 +115,11 @@ SECTIONS = [
      "past five years of weekly returns only and held for the next month; cash or borrowing at "
      "6.5%, no costs. Equal thirds, rebalanced monthly, is the plain alternative.",
      multi_figure),
+    ("Sizing a signal",
+     "Kelly needs the true chance of winning; a model gives an estimate. Its calibration slope, "
+     "measured on earlier predictions, says how far to pull that estimate back toward 50% before "
+     "betting. 0.56 is what the NIFTY 50 signal in this repository scored out of sample.",
+     signal_section),
 ]
 
 

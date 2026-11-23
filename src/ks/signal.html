@@ -1,0 +1,25 @@
+<form class="calc" id="sig" onsubmit="return false">
+  <label>Model’s win chance, % <input id="sg-p" type="number" min="1" max="99" step="0.5" value="55" inputmode="decimal" autocomplete="off"></label>
+  <label>Win per ₹1 staked, ₹ <input id="sg-b" type="number" min="0.1" max="20" step="0.1" value="1" inputmode="decimal" autocomplete="off"></label>
+  <label>Calibration slope <input id="sg-s" type="number" min="0" max="2" step="0.05" value="$slope" inputmode="decimal" autocomplete="off"></label>
+</form>
+<p class="note" id="sg-note" aria-live="polite"></p>
+<div class="table-scroll"><table class="data">
+  <thead><tr><th scope="col">Stake</th><th scope="col">Fraction of wealth</th><th scope="col">Growth per bet if the recalibrated chance is true</th></tr></thead>
+  <tbody id="sg-out"></tbody>
+</table></div>
+<script>
+(() => {
+  const el = (id) => document.getElementById(id), pct = (x, d = 1) => (x * 100).toFixed(d) + "%";
+  const update = () => {
+    const p = parseFloat(el("sg-p").value) / 100, b = parseFloat(el("sg-b").value), s = parseFloat(el("sg-s").value);
+    if (!(p > 0 && p < 1 && b > 0 && s >= 0)) { el("sg-out").innerHTML = ""; el("sg-note").textContent = "Enter a chance between 1% and 99%, a win above ₹0 and a slope of 0 or more."; return; }
+    const pc = recalibrate(p, 0, s), raw = kellyFraction(p, b), cal = kellyFraction(pc, b);
+    el("sg-note").textContent = `Recalibrated chance: ${pct(pc)}. A slope of 1 means the model is calibrated; below 1 it is overconfident.`;
+    const rows = [["Kelly on the model’s chance", raw], ["½ Kelly on the model’s chance", raw / 2], ["Kelly on the recalibrated chance", cal], ["½ Kelly on the recalibrated chance", cal / 2]];
+    el("sg-out").innerHTML = rows.map(([n, f]) => `<tr><th scope="row">${n}</th><td>${pct(f)}</td><td>${f > 0 ? (growthRate(Math.min(f, 0.999), pc, b) * 100).toFixed(3) + "%" : "no bet"}</td></tr>`).join("");
+  };
+  el("sig").addEventListener("input", update);
+  update();
+})();
+</script>

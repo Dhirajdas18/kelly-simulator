@@ -65,4 +65,7 @@ function kellySpread(mu, sigma, rl, rb) {
   return borrow >= 1 ? borrow : 1;
 }
 
-if (typeof module !== "undefined") module.exports = { kellySpread, kellyFraction, growthRate, simulate, summarise, quantile, median, kellyContinuous, growthContinuous, optimalMultiple, yearsToConfidence };
+// A model's win probability corrected by its calibration (mirrors ks/signal.py).
+function recalibrate(p, a, slope) { return 1 / (1 + Math.exp(-(a + slope * Math.log(p / (1 - p))))); }
+
+if (typeof module !== "undefined") module.exports = { recalibrate, kellySpread, kellyFraction, growthRate, simulate, summarise, quantile, median, kellyContinuous, growthContinuous, optimalMultiple, yearsToConfidence };
