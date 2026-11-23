@@ -14,10 +14,10 @@
   const update = () => {
     const p = parseFloat(el("sg-p").value) / 100, b = parseFloat(el("sg-b").value), s = parseFloat(el("sg-s").value);
     if (!(p > 0 && p < 1 && b > 0 && s >= 0)) { el("sg-out").innerHTML = ""; el("sg-note").textContent = "Enter a chance between 1% and 99%, a win above ₹0 and a slope of 0 or more."; return; }
-    const pc = recalibrate(p, 0, s), raw = kellyFraction(p, b), cal = kellyFraction(pc, b);
+    const pc = recalibrate(p, $intercept, s), raw = kellyFraction(p, b), cal = kellyFraction(pc, b);
     el("sg-note").textContent = `Recalibrated chance: ${pct(pc)}. A slope of 1 means the model is calibrated; below 1 it is overconfident.`;
     const rows = [["Kelly on the model’s chance", raw], ["½ Kelly on the model’s chance", raw / 2], ["Kelly on the recalibrated chance", cal], ["½ Kelly on the recalibrated chance", cal / 2]];
-    el("sg-out").innerHTML = rows.map(([n, f]) => `<tr><th scope="row">${n}</th><td>${pct(f)}</td><td>${f > 0 ? (growthRate(Math.min(f, 0.999), pc, b) * 100).toFixed(3) + "%" : "no bet"}</td></tr>`).join("");
+    el("sg-out").innerHTML = rows.map(([n, f]) => `<tr><th scope="row">${n}</th><td>${pct(f)}</td><td>${f > 0 ? (growthRate(Math.min(f, 0.999), pc, b) * 100).toFixed(3).replace("-", "−") + "%" : "no bet"}</td></tr>`).join("");
   };
   el("sig").addEventListener("input", update);
   update();

@@ -40,3 +40,8 @@ def test_halving_probability_continuous_limit():
     assert halving_probability(1.0) == pytest.approx(0.5)
     assert halving_probability(0.5) == pytest.approx(0.125)
     assert halving_probability(2.0) == 1.0
+
+
+def test_degenerate_inputs_do_not_raise():
+    assert kelly_fraction(0.6, 0.0) == 0.0
+    assert halving_probability(0.0) == 0.0

@@ -45,7 +45,7 @@ rate per bet; 10,000 simulated players per bet size, each starting with ₹1.
 Typical = e^(average log wealth), within 4% of the median in every row.
 
 - **The curve is flat at the top:** half Kelly gave up 25% of the growth for a quarter of the halving risk.
-  1.5× Kelly grew exactly as fast as half Kelly (0.37% against 0.38%) with 6.6 times the chance of halving.
+  1.5× Kelly grew about as fast as half Kelly (0.37% against 0.38%) with 6.6 times the chance of halving.
 - **Double Kelly grows at zero:** betting 20% of wealth on a 55% coin left the typical player with ₹0.90 after
   1,000 bets, and half of them behind.
 - **The theory's halving odds held:** in the limit of many small bets, the chance of ever falling to half is
@@ -80,8 +80,9 @@ reset every day and cash or borrowing at 6.5% for the calendar days between clos
 - **The formula and the replay agree:** the realised curves sit on the formula's parabolas, and at twice
   Kelly growth fell back to about the cash rate (6.1% and 6.6%), as in section 1.
 - **The answer depends on the start date:** the ETF's history starts in January 2009, after the 2008 fall;
-  the index's in September 2007, before it. Kelly's fraction was 2.7 from one and 1.1 from the other. (The
-  index leaves out dividends, so its return is understated; it still shows how much the start moves f\*.)
+  the index's in September 2007, before it. On the same index, starting in January 2009 instead of
+  September 2007 moved Kelly's fraction from 1.12 to 2.25; the ETF from 2009 gave 2.74 (it includes
+  dividends, and its volatility was 16.5% against the index's 17.7%).
 - **Leverage can wipe you out in a day:** the ETF's worst day was −10.2% (23 March 2020), so a fraction of
   9.8 would have lost everything at once.
 
@@ -114,7 +115,7 @@ Sharpe of 0.45 (2009–2026):
 | 20 | 0.80 | 7.0% | 7.7% |
 | known exactly | 1.00 | 7.6% | 10.2% |
 
-- **Half Kelly falls out of the maths:** with 5 years of data the best multiple is exactly 0.50, and full
+- **Half Kelly falls out of the maths:** with 5 years of data the best multiple is 0.50, and full
   Kelly's expected growth is about the cash rate. A simulation (4,000 runs of 5 years) gave 5.2% above cash
   at half and −0.05% at full, matching the formula.
 
@@ -136,7 +137,7 @@ next month, reset daily, borrowing or lending at 6.5%; no costs.
   beat holding on 2, 4 and 9 of the 41. From 3-year estimates growth was 9.3–10.3% and falls up to −82%.
   These are today's NIFTY members, which favours holding them.
 
-### 4. Even with NIFTY's return known exactly, Kelly needs 132 years to beat simply holding with 95% confidence, and every simulated Kelly path halved from a peak within 20 years
+### 4. Even with NIFTY's return known exactly, Kelly needs 132 years to beat simply holding with 95% confidence, and 99.6% of simulated Kelly paths halved from a peak within 20 years
 
 <a href="docs/img/dd_ahead.png"><picture><source media="(prefers-reduced-motion: reduce)" srcset="docs/img/dd_ahead.png"><img src="docs/img/dd_ahead.gif" alt="Chance that Kelly has more money than half Kelly or than holding NIFTY, against years" width="720"></picture></a>
 
@@ -161,19 +162,19 @@ is ahead after T years is **Φ(√T · S · (1 − (c1 + c2)/2))**, with S the S
 
 | 2,000 simulated 20-year paths | ¼ Kelly | ½ Kelly | hold 1× | Kelly | 1.5× Kelly |
 |---|---|---|---|---|---|
-| fell 50% or more from a peak | 0% | 28% | 3% | **100%** | 100% |
+| fell 50% or more from a peak | 0% | 28% | 3% | **99.6%** | 100% |
 | fell 70% or more | 0% | 1% | 0% | **70%** | 99% |
 | median worst fall | −20% | −44% | −32% | −76% | −92% |
 | median longest time below a peak | 2.5 years | 3.8 | 3.2 | 5.9 | 8.0 |
 | median growth a year | 11.0% | 14.2% | 12.6% | 16.8% | 14.4% |
 
 - **The price of the extra growth (left):** Kelly added 2.6 points a year over half Kelly at the median, and
-  every Kelly path lost half its peak value at least once; 70% lost more than two-thirds.
+  99.6% of Kelly paths (1,992 of 2,000) lost half their peak value at least once; 70% lost 70% or more.
 - **On NIFTY's actual path (right):** at the hindsight Kelly fraction of 2.74, daily rebalanced with
   borrowing at 6.5%, the worst fall was −75% (23 March 2020) against −47% at half Kelly and −36% holding 1×.
   The longest spells below a previous peak were 3.8, 3.5 and 3.0 years.
 
-### 5. Across NIFTY, gold and the US, hindsight Kelly wanted 8× leverage; out of sample, equal thirds beat half Kelly at the same exposure
+### 5. Across NIFTY, gold and the US, hindsight Kelly wanted 8× leverage; out of sample, equal thirds beat Kelly-estimated weights at the same exposure
 
 <a href="docs/img/multi_walk.png"><picture><source media="(prefers-reduced-motion: reduce)" srcset="docs/img/multi_walk.png"><img src="docs/img/multi_walk.gif" alt="Wealth from 2014 for holding NIFTY, equal thirds and Kelly sized monthly across NIFTY, gold and the US" width="720"></picture></a>
 
@@ -187,10 +188,10 @@ and the US market (S&P 500 total return × USD/INR, both from Yahoo). Cash at 6.
 |---|---|---|---|
 | average return / volatility | 13.9% / 16.5% | 12.4% / 14.3% | 18.4% / 16.5% |
 | correlation with NIFTY | — | −0.06 | 0.33 |
-| hindsight Kelly weight | 1.65 | 2.73 | 3.64 |
+| hindsight Kelly weight | 1.64 | 2.73 | 3.68 |
 
-- **Hindsight Kelly borrowed 7 times its wealth:** the weights total 8.0×. The tangency mix (NIFTY 21%,
-  gold 34%, US 45%) had a Sharpe of 0.85 against NIFTY's 0.45, so the formula's best growth rose from 17%
+- **Hindsight Kelly borrowed 7 times its wealth:** the weights total 8.0×. The tangency mix (NIFTY 20%,
+  gold 34%, US 46%) had a Sharpe of 0.85 against NIFTY's 0.45, so the formula's best growth rose from 17%
   (NIFTY alone at 2.7×) to 42% a year. Without borrowing, the best hindsight mix was 100% US.
 
 <table><tr>
@@ -198,23 +199,24 @@ and the US market (S&P 500 total return × USD/INR, both from Yahoo). Cash at 6.
 <td><a href="docs/img/multi_growth.png"><picture><source media="(prefers-reduced-motion: reduce)" srcset="docs/img/multi_growth.png"><img src="docs/img/multi_growth.gif" alt="Expected growth against total exposure for the tangency mix and for NIFTY alone"></picture></a></td>
 </tr></table>
 
-Walk-forward (chart at top): each month, Kelly's weights estimated from the past 5 years of weekly returns
-only, long only, held through the next month; no costs.
+Walk-forward (chart at top): each month, the best long-only weights with total at most the cap, estimated
+from the past 5 years of weekly returns only, then multiplied by ½ or 1 (half Kelly holds half the capped
+position, the rest in cash), held through the next month; no costs.
 
 | January 2014 – November 2026 | Growth a year | Worst fall | Average weights (NIFTY / gold / US) |
 |---|---|---|---|
 | hold NIFTY | 11.8% | −34% | 1 / 0 / 0 |
 | **equal thirds**, rebalanced monthly | **13.2%** | **−20%** | 0.33 / 0.33 / 0.33 |
-| ½ Kelly, no borrowing | 10.1% | −27% | 0.08 / 0.13 / 0.78 |
-| ½ Kelly, up to 2× | 14.1% | −44% | 0.27 / 0.40 / 1.33 |
+| ½ Kelly, no borrowing (total 0.5) | 8.9% | −14% | 0.03 / 0.04 / 0.43 |
+| ½ Kelly, up to 2× (total 1.0) | 10.1% | −27% | 0.08 / 0.13 / 0.78 |
 | Kelly, up to 3× | 12.2% | −63% | 0.33 / 0.53 / 2.14 |
 
-- **At the same exposure, the plain mix won:** without borrowing, equal thirds grew 3.1 points a year faster
-  than half Kelly's estimated weights, with a shallower worst fall. Half Kelly averaged 78% in the US.
-- **Leverage bought little:** half Kelly at up to 2× added 0.9 points over equal thirds for a worst fall of
-  −44% instead of −20%; full Kelly at up to 3× grew less than equal thirds and fell −63%.
+- **At the same exposure, the plain mix won:** fully invested, equal thirds grew 3.1 points a year faster
+  than half Kelly's estimated weights (½ Kelly up to 2×, which held 1.0 on average), with a shallower worst
+  fall. Those weights averaged 78% in the US.
+- **Leverage bought little:** full Kelly at up to 3× grew 1.0 point less than equal thirds and fell −63%.
 
-### 6. At Zerodha's 14.6% margin rate, NIFTY's Kelly fraction fell from 2.7× to exactly 1×; sizing by forecast volatility cut the worst fall from 36% to 25%
+### 6. At Zerodha's 14.6% margin rate, NIFTY's Kelly fraction fell from 2.7× to exactly 1×; sizing by forecast volatility cut the worst fall from 36% to 28%
 
 <a href="docs/img/fric_spread.png"><picture><source media="(prefers-reduced-motion: reduce)" srcset="docs/img/fric_spread.png"><img src="docs/img/fric_spread.gif" alt="Expected growth against the fraction in NIFTY when borrowing at 6.5% and at 14.6%" width="720"></picture></a>
 
@@ -230,34 +232,36 @@ cash rate applies, above it the margin rate. Kelly's fraction is (μ − 6.5%)/�
   instead of 16.7% at 2.7×).
 
 <table><tr>
-<td><a href="docs/img/fric_costs.png"><picture><source media="(prefers-reduced-motion: reduce)" srcset="docs/img/fric_costs.png"><img src="docs/img/fric_costs.gif" alt="Growth a year at 1.37x NIFTY with cheap and margin-rate borrowing, with and without trading costs"></picture></a></td>
+<td><a href="docs/img/fric_costs.png"><picture><source media="(prefers-reduced-motion: reduce)" srcset="docs/img/fric_costs.png"><img src="docs/img/fric_costs.gif" alt="Growth a year at 1.18x NIFTY with cheap and margin-rate borrowing, with and without trading costs"></picture></a></td>
 <td><a href="docs/img/fric_voltarget.png"><picture><source media="(prefers-reduced-motion: reduce)" srcset="docs/img/fric_voltarget.png"><img src="docs/img/fric_voltarget.gif" alt="Wealth from 2014 for holding NIFTY against volatility targeting and half Kelly with EWMA volatility"></picture></a></td>
 </tr></table>
 
 Replays of the NIFTY ETF, January 2014 – November 2026, ₹10 lakh, with ETF delivery costs: STT 0.001% on
 sells only, stamp duty 0.015% on buys, exchange and SEBI charges with GST, ₹15.93 DP charge per sell day
 ([Zerodha charges](https://zerodha.com/charges), [STT on ETFs](https://support.zerodha.com/category/account-opening/charges-at-zerodha/articles/stt-etfs)),
-plus an assumed 0.05% slippage per side. Spare cash earns 6.5%.
+plus an assumed 0.05% slippage per side. Spare cash earns 6.5%. The fixed inputs come from before the test
+period only: from January 2009 to December 2013 NIFTY averaged 16.9% with 21.0% volatility, so half Kelly
+was 1.18× and the volatility target is 21%.
 
 | 2014–2026 | Growth a year | Worst fall | Volatility | Average fraction | Trading costs a year |
 |---|---|---|---|---|---|
 | hold 1× | 11.7% | −36% | 14.4% | 1.00 | 0 |
-| 1.37× (½ Kelly), borrow at 6.5%, no costs | 13.1% | −47% | 19.8% | 1.37 | 0 |
-| 1.37×, borrow at 14.6%, no costs | 10.1% | −47% | 19.8% | 1.37 | 0 |
-| 1.37×, 14.6% and costs, reset daily | 9.8% | −47% | 19.8% | 1.37 | 0.32% |
-| 1.37×, 14.6% and costs, reset beyond ±0.1 | 10.1% | −48% | 19.6% | 1.34 | 0.00% |
-| **volatility target 16.5%, up to 1×** | **11.0%** | **−25%** | 12.3% | 0.93 | 0.03% |
+| 1.18× (½ Kelly from 2009–13), borrow at 6.5%, no costs | 12.5% | −42% | 17.0% | 1.18 | 0 |
+| 1.18×, borrow at 14.6%, no costs | 11.0% | −42% | 17.0% | 1.18 | 0 |
+| 1.18×, 14.6% and costs, reset daily | 10.8% | −42% | 17.0% | 1.18 | 0.21% |
+| 1.18×, 14.6% and costs, reset beyond ±0.1 | 11.0% | −43% | 17.0% | 1.17 | 0.00% |
+| **volatility target 21%, up to 1×** | **11.2%** | **−28%** | 12.7% | 0.94 | 0.01% |
 | ½ Kelly with EWMA volatility, up to 1× | 10.2% | −17% | 11.0% | 0.85 | 0.10% |
-| volatility target 16.5%, up to 1.5× | 8.5% | −31% | 15.8% | 1.26 | 0.22% |
+| volatility target 21%, up to 1.5× | 8.7% | −36% | 17.9% | 1.38 | 0.12% |
 
-- **The margin rate was the big friction (left):** at 1.37× it cost 3.0 points a year and left growth
-  below simply holding. Trading costs were small for an ETF: resetting every day cost 0.32% a year, and a
+- **The margin rate was the big friction (left):** at 1.18× it cost 1.5 points a year and left growth
+  below simply holding. Trading costs were small for an ETF: resetting every day cost 0.21% a year, and a
   ±0.1 band brought that to almost nothing.
-- **Volatility targeting (right):** each day hold 16.5% ÷ tomorrow's EWMA volatility forecast (λ 0.94, from
-  past returns only), at most 1×, trading only when the gap exceeds 0.1. It grew 0.8 points a year slower
-  than holding with a worst fall of −25% instead of −36%. Half Kelly with the EWMA forecast and the past
+- **Volatility targeting (right):** each day hold 21% ÷ tomorrow's EWMA volatility forecast (λ 0.94, from
+  past returns only), at most 1×, trading only when the gap exceeds 0.1. It grew 0.5 points a year slower
+  than holding with a worst fall of −28% instead of −36%. Half Kelly with the EWMA forecast and the past
   five years' average return grew 10.2% with a worst fall of −17%. Allowing borrowing at the margin rate
-  (up to 1.5×) made volatility targeting worse on both counts.
+  (up to 1.5×) made volatility targeting worse on growth and no better on the worst fall.
 
 ### 7. A model that overstates its edge 2× bets 2× Kelly; a real NIFTY 50 signal was that overconfident, and no sizing of it beat zero
 
@@ -273,8 +277,9 @@ is overconfident by about 1/slope.
 The signal: each month end since 2010, for today's NIFTY 50 stocks, the chance a stock beats the median of
 the same stocks next month, from a logistic model of three ranks: 12-to-1-month momentum, last month's
 return and 60-day volatility, refitted every month on earlier months only (9,212 stock-months; out of sample
-from January 2013, 7,698 predictions). The bar is the median of the same stocks, so the survivors'
-outperformance cancels out of the label (49.4% of stock-months beat it).
+from January 2013, 7,698 predictions). Using the median of the same stocks as the bar removes the survivors' average outperformance from
+the label (49.4% of stock-months beat it); survivorship could still affect which features look useful,
+which this test does not rule out.
 
 - **Overconfident (top):** out-of-sample calibration slope 0.56. The tenth of predictions averaging 54.9%
   beat the median 52.3% of the time; the bottom tenth, 43.3%, did so 48.5% of the time. Recalibrating each

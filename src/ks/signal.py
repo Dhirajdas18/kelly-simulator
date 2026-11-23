@@ -3,8 +3,8 @@
 The signal: each month end, for today's NIFTY 50 stocks, the chance a stock beats the median of the
 same stocks next month, from a logistic model of three cross-sectional ranks (12-to-1-month
 momentum, last month's return, 60-day volatility), refitted each month on earlier months only.
-Using the median of the same stocks as the bar keeps survivorship (today's members did well) out of
-the label.
+Using the median of the same stocks as the bar keeps the survivors' average outperformance (today's
+members did well) out of the label; it does not rule out survivorship shaping the features' value.
 
 Calibration: fit P(win) = sigmoid(a + slope·logit(p)) on past predictions. A slope below 1 means the
 model is overconfident: its probabilities sit too far from 50%. For an even-money bet Kelly stakes

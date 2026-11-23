@@ -12,6 +12,8 @@ import numpy as np
 
 
 def kelly_fraction(p: float, b: float) -> float:
+    if b <= 0:
+        return 0.0
     return max(0.0, p - (1 - p) / b)
 
 
@@ -46,6 +48,8 @@ def summarise(logw: np.ndarray) -> dict:
 def halving_probability(multiple: float, x: float = 0.5) -> float:
     """Chance wealth ever falls to x of its start when betting `multiple` × Kelly, in the
     continuous (many small bets) limit: x^(2/multiple − 1). At 2× Kelly or more it is certain."""
+    if multiple <= 0:
+        return 0.0
     if multiple >= 2:
         return 1.0
     return float(x ** (2 / multiple - 1))

@@ -205,7 +205,7 @@ def report_stock(out_dir: Path) -> dict:
                       "Sharpe": round((s["mu"] - RF) / s["sigma"], 2),
                       "years": round(s["years"], 1),
                       "Kelly": round(fstar[k], 2)} for k, s in stats.items()},
-        "realised growth at 0 / 0.5 / 1 / f* / 2f* (%/yr)": {
+        "realised growth at 0 / 0.5 / 1 / f*/2 / f* / 2f* (%/yr)": {
             k: [round(levered_growth(r, f, RF) * 100, 1)
                 for f in (0, 0.5, 1, fstar[k] / 2, fstar[k], 2 * fstar[k])]
             for k, r in series.items()},
@@ -496,7 +496,14 @@ def weekly_assets() -> pd.DataFrame:
 
 def report_multi(out_dir: Path) -> dict:
     """Kelly across NIFTY, gold and the US: hindsight weights, growth, and a walk-forward."""
-    from ks.multi import capped_kelly, growth_multi, kelly_weights, tangency, walk_forward_multi
+    from ks.multi import (
+        capped_kelly,
+        fractional_kelly,
+        growth_multi,
+        kelly_weights,
+        tangency,
+        walk_forward_multi,
+    )
 
     W = weekly_assets()
     years = (W.index[-1] - W.index[0]).days / 365.25
@@ -508,7 +515,7 @@ def report_multi(out_dir: Path) -> dict:
     s_tan = float(tan @ (mu - RF) / np.sqrt(tan @ cov @ tan))
     variants = {"Kelly": k, "½ Kelly": k / 2,
                 "best with no borrowing": capped_kelly(mu, cov, RF, 1),
-                "½ Kelly, no borrowing": capped_kelly(mu, cov / 0.5, RF, 1)}
+                "½ Kelly, no borrowing": fractional_kelly(mu, cov, RF, 0.5, 1)}
 
     fig, ax = plt.subplots(figsize=(9, 4.6))
     xb = np.arange(len(variants))
@@ -622,13 +629,15 @@ def report_frictions(out_dir: Path) -> dict:
     def run(target, rb=MTF_RATE, band=0.0, costs=True):
         res = run_strategy(x, target.reindex(x.index), RF, rb, 1e6, band, costs)
         g, d = _growth_dd(res["wealth"])
-        vol = float(np.log(res["wealth"]).diff().std() * np.sqrt(247))
+        vol = float(np.log(res["wealth"]).diff().std() * np.sqrt(st["per_year"]))
         return {"growth": g, "worst": d, "vol": vol, "avg f": float(res["fraction"].mean()),
                 "trades a year": res["trades"] / years, "costs a year": res["costs"] / years,
                 "wealth": res["wealth"]}
 
     const = lambda v: pd.Series(v, index=r.index)  # noqa: E731
-    half = round(k_one / 2, 2)
+    pre = annual_stats(r[r.index < EVAL_START])  # inputs from before the test period only
+    half = round(kelly_continuous(pre["mu"], pre["sigma"], RF) / 2, 2)
+    target = round(pre["sigma"], 3)
     lev = {"borrow at 6.5%, no costs": run(const(half), RF, costs=False),
            "borrow at 14.6%, no costs": run(const(half), costs=False),
            "+ ETF costs, reset daily": run(const(half)),
@@ -654,13 +663,14 @@ def report_frictions(out_dir: Path) -> dict:
                  f"daily trading {lev['+ ETF costs, reset daily']['costs a year'] * 100:.1f}")
     plots.save(fig, out_dir, "fric_costs")
 
-    sig_next = ewma_vol(r).shift(-1).ffill()  # tomorrow's forecast from returns up to today
+    sig_next = ewma_vol(r, per_year=st["per_year"]).shift(-1).ffill()  # tomorrow's, from today
     mu5 = r.rolling("1826D").mean() * st["per_year"]  # past five years' average return
     dyn = {"hold 1×": hold,
-           "volatility target 16.5%, up to 1×": run((0.165 / sig_next).clip(upper=1), band=0.1),
+           f"volatility target {target:.0%}, up to 1×": run((target / sig_next).clip(upper=1),
+                                                             band=0.1),
            "½ Kelly with EWMA volatility, up to 1×": run(
                (0.5 * (mu5 - RF) / sig_next**2).clip(0, 1), band=0.1),
-           "volatility target 16.5%, up to 1.5×": run((0.165 / sig_next).clip(upper=1.5),
+           f"volatility target {target:.0%}, up to 1.5×": run((target / sig_next).clip(upper=1.5),
                                                        band=0.1)}
     fig, ax = plt.subplots(figsize=(9, 4.8))
     for (n, v), c in zip(dyn.items(), (plots.TEXT, plots.SERIES[2], plots.SERIES[0],
@@ -671,7 +681,7 @@ def report_frictions(out_dir: Path) -> dict:
     ax.set_ylabel("wealth from ₹1 in January 2014 (log scale)")
     _rupee_log(ax)
     ax.legend(loc="upper left", fontsize=8)
-    vt = dyn["volatility target 16.5%, up to 1×"]
+    vt = dyn[f"volatility target {target:.0%}, up to 1×"]
     cost = (hold["growth"] - vt["growth"]) * 100
     ax.set_title(f"Sizing by forecast volatility cut the worst fall from {-hold['worst']:.0%} to "
                  f"{-vt['worst']:.0%} for {cost:.1f} points a year")
@@ -683,7 +693,8 @@ def report_frictions(out_dir: Path) -> dict:
         "Kelly: one rate / lend 6.5% borrow 14.6%": (round(k_one, 2), round(k_spread, 2)),
         "hindsight growth at Kelly": (f"{growth_spread(k_one, mu, sig, RF, RF):.1%}",
                                       f"{growth_spread(k_spread, mu, sig, RF, MTF_RATE):.1%}"),
-        "half-Kelly constant fraction": half,
+        "before 2014 (mu, sigma, Kelly/2 used, vol target used)": (
+            round(pre["mu"], 4), round(pre["sigma"], 4), half, target),
         "2014-26 levered": {n: {kk: round(v[kk], 4) for kk in keep} for n, v in lev.items()},
         "2014-26 dynamic": {n: {kk: round(v[kk], 4) for kk in keep} for n, v in dyn.items()},
     }

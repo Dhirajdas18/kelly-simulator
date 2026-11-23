@@ -22,7 +22,8 @@ JS = (HERE / "kelly.js").read_text(encoding="utf-8")
 SIMULATOR = (HERE / "simulator.html").read_text(encoding="utf-8")
 STOCK = (HERE / "stock.html").read_text(encoding="utf-8")
 SIGNAL = (HERE / "signal.html").read_text(encoding="utf-8")
-SLOPE = 0.56  # the signal's out-of-sample calibration slope, 2013-2026 (ks report signal)
+SLOPE, INTERCEPT = 0.56, -0.004  # the signal's out-of-sample calibration, 2013-2026
+# (ks report signal)
 LABELS = {"NIFTYBEES": "NIFTY 50 ETF (NIFTYBEES)", "GOLDBEES": "Gold ETF (GOLDBEES)"}
 WINDOWS = {"1y": 1, "3y": 3, "5y": 5, "2009": None}
 PAGE = Template((HERE / "page.html").read_text(encoding="utf-8"))
@@ -94,7 +95,7 @@ def multi_figure(data: pd.DataFrame) -> go.Figure:
 
 
 def signal_section(data: pd.DataFrame) -> str:
-    return SIGNAL.replace("$slope", f"{SLOPE:g}")
+    return SIGNAL.replace("$slope", f"{SLOPE:g}").replace("$intercept", f"{INTERCEPT:g}")
 
 
 SECTIONS = [

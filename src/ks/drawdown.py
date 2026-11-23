@@ -6,7 +6,7 @@ normal amount, so the chance that c1 ends ahead after T years is
 
     Φ( √T · S · (1 − (c1 + c2)/2) )
 
-Kelly against half Kelly is Φ(√T·S/4): with S 0.45 that needs 214 years for 95% confidence.
+Kelly against half Kelly is Φ(√T·S/4): with S 0.45 that needs 213 years for 95% confidence.
 """
 
 import numpy as np

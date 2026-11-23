@@ -37,6 +37,12 @@ def capped_kelly(mu, cov, rf: float, max_gross: float = 1.0) -> np.ndarray:
     return res.x
 
 
+def fractional_kelly(mu, cov, rf: float, multiple: float, max_gross: float) -> np.ndarray:
+    """`multiple` × the best long-only position with gross at most `max_gross`: half Kelly holds
+    half of it (the rest in cash), even when the cap binds."""
+    return multiple * capped_kelly(mu, cov, rf, max_gross)
+
+
 def walk_forward_multi(W, rf: float, multiple: float, window_years: float, max_gross: float,
                        start: str, fixed=None) -> dict:
     """Weekly returns W (assets in columns). At each month's last week, estimate mean and
@@ -56,7 +62,7 @@ def walk_forward_multi(W, rf: float, multiple: float, window_years: float, max_g
         past = W[(W.index <= t) & (W.index > t - pd.DateOffset(years=window_years))]
         per_year = (len(past) - 1) / ((past.index[-1] - past.index[0]).days / 365.25)
         mu, cov = past.mean().to_numpy() * per_year, past.cov().to_numpy() * per_year
-        decided[t] = capped_kelly(mu, cov / multiple, rf, max_gross)  # c × Kelly = cov / c
+        decided[t] = fractional_kelly(mu, cov, rf, multiple, max_gross)
     weights = (pd.DataFrame(decided, index=W.columns).T.reindex(W.index).ffill().shift(1))
     days = W.index.to_series().diff().dt.days.fillna(0).to_numpy()
     cash = (1 + rf) ** (days / 365) - 1

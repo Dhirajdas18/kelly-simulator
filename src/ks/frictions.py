@@ -59,9 +59,13 @@ def etf_trade_cost(buy: float, sell: float, capital: float, mtf: bool = False,
     return float(cost)
 
 
-def ewma_vol(r: pd.Series, lam: float = 0.94, per_year: float = 247, seed: int = 30) -> pd.Series:
+def ewma_vol(r: pd.Series, lam: float = 0.94, per_year: float | None = None,
+             seed: int = 30) -> pd.Series:
     """Annualised volatility forecast for each day from the returns before it (RiskMetrics EWMA,
-    seeded with the first `seed` days); NaN until then."""
+    seeded with the first `seed` days); NaN until then. `per_year` defaults to the calendar rate
+    of the series' own dates."""
+    if per_year is None:
+        per_year = (len(r) - 1) / ((r.index[-1] - r.index[0]).days / 365.25)
     x = r.to_numpy()
     out = np.full(len(x), np.nan)
     v = float(np.mean(x[:seed] ** 2))

@@ -16,14 +16,14 @@
   const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
   const sym = el("st-sym");
   sym.innerHTML = D.symbols.map((s) => `<option value="${s}">${D.labels[s] || s}</option>`).join("");
-  const pct = (x) => (x * 100).toFixed(1) + "%";
+  const pct = (x) => (x * 100).toFixed(1).replace("-", "−") + "%";
   const update = () => {
     const st = D.stats[sym.value][el("st-win").value];
     if (!st) { el("st-out").innerHTML = ""; Plotly.purge("st-chart"); el("st-note").textContent = "Not enough history in this window for this holding."; return; }
     const [mu, sigma, years] = st, rf = D.rf, k = kellyContinuous(mu, sigma, rf);
     const best = optimalMultiple((mu - rf) / sigma, years);
     el("st-note").textContent = `Average return ${pct(mu)} a year, volatility ${pct(sigma)}, cash ${pct(rf)}; ` +
-      `Sharpe ratio ${((mu - rf) / sigma).toFixed(2)}. Kelly’s fraction: ${k.toFixed(2)}` +
+      `Sharpe ratio ${((mu - rf) / sigma).toFixed(2).replace("-", "−")}. Kelly’s fraction: ${k.toFixed(2).replace("-", "−")}` +
       (k <= 0 ? " — no edge over cash in this window: Kelly holds none." : k > 1 ? ` — borrow to hold ${k.toFixed(1)}× your money.` : ".") +
       (k > 1 ? ` Borrowing at Zerodha’s margin rate (${pct(D.mtf)}) instead, Kelly’s fraction is ${kellySpread(mu, sigma, rf, D.mtf).toFixed(2)}.` : "") +
       (k > 0 ? ` That average comes from ${years.toFixed(1)} years of data; with that much noise the best bet is ${best.toFixed(2)}× the estimate, ${(best * k).toFixed(2)} of your money.` : "") +
