@@ -19,7 +19,7 @@ window and see what Kelly's fraction was. It runs in your browser.
 - [x] Estimation error: Kelly from an estimated edge, theory and walk-forward on NIFTY and 41 stocks
 - [x] Drawdowns and time under full and fractional Kelly
 - [x] Many assets: f = Σ⁻¹(μ − r) on NIFTY, gold and the US, hindsight and walk-forward
-- [ ] Rebalancing frequency, costs, margin and fat tails; Kelly against volatility targeting
+- [x] Margin interest, ETF trading costs and rebalancing bands; Kelly against volatility targeting
 - [ ] Sizing a trading signal from calibrated win rates and payoffs
 
 ## Findings
@@ -214,12 +214,57 @@ only, long only, held through the next month; no costs.
 - **Leverage bought little:** half Kelly at up to 2× added 0.9 points over equal thirds for a worst fall of
   −44% instead of −20%; full Kelly at up to 3× grew less than equal thirds and fell −63%.
 
+### 6. At Zerodha's 14.6% margin rate, NIFTY's Kelly fraction fell from 2.7× to exactly 1×; sizing by forecast volatility cut the worst fall from 36% to 25%
+
+<a href="docs/img/fric_spread.png"><picture><source media="(prefers-reduced-motion: reduce)" srcset="docs/img/fric_spread.png"><img src="docs/img/fric_spread.gif" alt="Expected growth against the fraction in NIFTY when borrowing at 6.5% and at 14.6%" width="720"></picture></a>
+
+Sections 2–5 borrowed at the same 6.5% that cash earns. Zerodha's margin trading facility (MTF) charges 0.04%
+a day on the funded amount, about 14.6% a year, plus 0.3% or ₹20 per order, whichever is lower
+([Zerodha support](https://support.zerodha.com/category/trading-and-markets/margins/margin-trading-facility/articles/interest-calculation-for-mtf),
+checked November 2026). With borrowing dearer than lending, the growth curve has a kink at 1: below it the
+cash rate applies, above it the margin rate. Kelly's fraction is (μ − 6.5%)/σ² if that is under 1,
+(μ − 14.6%)/σ² if that is over 1, and exactly 1 in between.
+
+- **Never borrow for NIFTY:** NIFTY's 13.9% average return (2009–2026) is below the 14.6% margin rate, so
+  every borrowed rupee lowers expected growth. Kelly's fraction became exactly 1 (hindsight growth 12.6%
+  instead of 16.7% at 2.7×).
+
+<table><tr>
+<td><a href="docs/img/fric_costs.png"><picture><source media="(prefers-reduced-motion: reduce)" srcset="docs/img/fric_costs.png"><img src="docs/img/fric_costs.gif" alt="Growth a year at 1.37x NIFTY with cheap and margin-rate borrowing, with and without trading costs"></picture></a></td>
+<td><a href="docs/img/fric_voltarget.png"><picture><source media="(prefers-reduced-motion: reduce)" srcset="docs/img/fric_voltarget.png"><img src="docs/img/fric_voltarget.gif" alt="Wealth from 2014 for holding NIFTY against volatility targeting and half Kelly with EWMA volatility"></picture></a></td>
+</tr></table>
+
+Replays of the NIFTY ETF, January 2014 – November 2026, ₹10 lakh, with ETF delivery costs: STT 0.001% on
+sells only, stamp duty 0.015% on buys, exchange and SEBI charges with GST, ₹15.93 DP charge per sell day
+([Zerodha charges](https://zerodha.com/charges), [STT on ETFs](https://support.zerodha.com/category/account-opening/charges-at-zerodha/articles/stt-etfs)),
+plus an assumed 0.05% slippage per side. Spare cash earns 6.5%.
+
+| 2014–2026 | Growth a year | Worst fall | Volatility | Average fraction | Trading costs a year |
+|---|---|---|---|---|---|
+| hold 1× | 11.7% | −36% | 14.4% | 1.00 | 0 |
+| 1.37× (½ Kelly), borrow at 6.5%, no costs | 13.1% | −47% | 19.8% | 1.37 | 0 |
+| 1.37×, borrow at 14.6%, no costs | 10.1% | −47% | 19.8% | 1.37 | 0 |
+| 1.37×, 14.6% and costs, reset daily | 9.8% | −47% | 19.8% | 1.37 | 0.32% |
+| 1.37×, 14.6% and costs, reset beyond ±0.1 | 10.1% | −48% | 19.6% | 1.34 | 0.00% |
+| **volatility target 16.5%, up to 1×** | **11.0%** | **−25%** | 12.3% | 0.93 | 0.03% |
+| ½ Kelly with EWMA volatility, up to 1× | 10.2% | −17% | 11.0% | 0.85 | 0.10% |
+| volatility target 16.5%, up to 1.5× | 8.5% | −31% | 15.8% | 1.26 | 0.22% |
+
+- **The margin rate was the big friction (left):** at 1.37× it cost 3.0 points a year and left growth
+  below simply holding. Trading costs were small for an ETF: resetting every day cost 0.32% a year, and a
+  ±0.1 band brought that to almost nothing.
+- **Volatility targeting (right):** each day hold 16.5% ÷ tomorrow's EWMA volatility forecast (λ 0.94, from
+  past returns only), at most 1×, trading only when the gap exceeds 0.1. It grew 0.8 points a year slower
+  than holding with a worst fall of −25% instead of −36%. Half Kelly with the EWMA forecast and the past
+  five years' average return grew 10.2% with a worst fall of −17%. Allowing borrowing at the margin rate
+  (up to 1.5×) made volatility targeting worse on both counts.
+
 ## Quick start
 
 ```bash
 uv sync
 uv run python scripts/fetch_data.py         # Yahoo Finance -> data/prices.parquet
-uv run ks report bets                       # also: stock, estimation, drawdown, multi
+uv run ks report bets                       # also: stock, estimation, drawdown, multi, frictions
 uv run python scripts/build_site.py         # simulator -> site/index.html
 uv run pytest
 ```
@@ -236,6 +281,8 @@ uv run pytest
   another after T years (and the years needed for a given confidence), and simulated wealth paths.
 - `src/ks/multi.py`: Kelly weights Σ⁻¹(μ − r), growth, the tangency portfolio, long-only Kelly with a
   leverage cap, and a monthly walk-forward on weekly returns.
+- `src/ks/frictions.py`: Kelly with a borrowing spread, Zerodha ETF and MTF costs, EWMA volatility
+  forecasts, and a daily replay with drift, rebalancing bands, costs and interest.
 - `src/ks/kelly.js`, `simulator.html`, `stock.html`: the same in the browser with a seeded generator; a test runs them
   through Node against Python.
 - `src/ks/data.py`: Yahoo prices for today's NIFTY 50, the index and two ETFs since 2007, with known errors

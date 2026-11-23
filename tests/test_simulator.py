@@ -67,3 +67,11 @@ def test_browser_years_to_confidence_matches_python():
     js = _node("[m.yearsToConfidence(1, 0.5, 0.45), m.yearsToConfidence(1, 0.365, 0.3)]")
     assert js == pytest.approx([years_to_confidence(1, 0.5, 0.45, 0.95),
                                 years_to_confidence(1, 0.365, 0.3, 0.95)], rel=1e-6)
+
+
+def test_browser_kelly_spread_matches_python():
+    from ks.frictions import kelly_spread
+
+    cases = [(0.139, 0.165), (0.10, 0.20), (0.40, 0.20), (0.03, 0.2)]
+    js = _node("[" + ",".join(f"m.kellySpread({a}, {b}, 0.065, 0.146)" for a, b in cases) + "]")
+    assert js == pytest.approx([kelly_spread(a, b, 0.065, 0.146) for a, b in cases], rel=1e-12)

@@ -58,4 +58,11 @@ function optimalMultiple(sharpe, years) { const x = sharpe * sharpe * years; ret
 // Years until c1 × Kelly beats c2 × Kelly with 95% confidence (mirrors ks/drawdown.py).
 function yearsToConfidence(c1, c2, sharpe) { const z = 1.6448536269514722; return (z / (sharpe * Math.abs(1 - (c1 + c2) / 2))) ** 2; }
 
-if (typeof module !== "undefined") module.exports = { kellyFraction, growthRate, simulate, summarise, quantile, median, kellyContinuous, growthContinuous, optimalMultiple, yearsToConfidence };
+// Kelly when borrowing costs more than cash earns (mirrors ks/frictions.py): a kink at 1.
+function kellySpread(mu, sigma, rl, rb) {
+  const lend = (mu - rl) / (sigma * sigma), borrow = (mu - rb) / (sigma * sigma);
+  if (lend <= 1) return Math.max(lend, 0);
+  return borrow >= 1 ? borrow : 1;
+}
+
+if (typeof module !== "undefined") module.exports = { kellySpread, kellyFraction, growthRate, simulate, summarise, quantile, median, kellyContinuous, growthContinuous, optimalMultiple, yearsToConfidence };

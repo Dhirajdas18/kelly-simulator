@@ -223,6 +223,15 @@ def report_stock(out_dir: Path) -> dict:
     }
 
 
+def _rupee_log(ax) -> None:
+    """Log wealth axis labelled ₹1, ₹2, ₹5… instead of powers of ten."""
+    from matplotlib.ticker import FuncFormatter, LogLocator
+
+    ax.yaxis.set_major_locator(LogLocator(base=10, subs=(1, 2, 5)))
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"₹{v:g}"))
+    ax.yaxis.set_minor_formatter(FuncFormatter(lambda v, _: ""))
+
+
 def _growth_dd(w: pd.Series) -> tuple[float, float]:
     years = (w.index[-1] - w.index[0]).days / 365.25
     return float(np.log(w.iloc[-1]) / years), float((w / w.cummax() - 1).min())
@@ -283,6 +292,7 @@ def report_estimation(out_dir: Path) -> dict:
                 label=f"{k}: {g:.1%} a year, worst fall {d:.0%}")
     ax.set_yscale("log")
     ax.set_ylabel("wealth from ₹1 in January 2014 (log scale)")
+    _rupee_log(ax)
     ax.legend(loc="upper left", fontsize=8)
     g5, _ = _growth_dd(runs["1× Kelly, 5-year estimate"]["wealth"])
     g3, _ = _growth_dd(runs["1× Kelly, 3-year estimate"]["wealth"])
@@ -551,6 +561,7 @@ def report_multi(out_dir: Path) -> dict:
                 label=f"{n}: {g:.1%} a year, worst fall {d:.0%}")
     ax.set_yscale("log")
     ax.set_ylabel("wealth from ₹1 in January 2014 (log scale)")
+    _rupee_log(ax)
     ax.legend(loc="upper left", fontsize=8)
     g3, _ = _growth_dd(res["equal thirds"]["wealth"])
     gh, _ = _growth_dd(res["½ Kelly, no borrowing"]["wealth"])
@@ -577,5 +588,106 @@ def report_multi(out_dir: Path) -> dict:
     }
 
 
+def report_frictions(out_dir: Path) -> dict:
+    """Kelly on NIFTY with Zerodha's margin rate and ETF costs, against volatility targeting."""
+    from ks.frictions import MTF_RATE, ewma_vol, growth_spread, kelly_spread, run_strategy
+    from ks.stock import annual_stats, kelly_continuous
+
+    r = returns()["NIFTYBEES"].loc[START:].dropna()
+    st = annual_stats(r)
+    mu, sig = st["mu"], st["sigma"]
+    k_one, k_spread = kelly_continuous(mu, sig, RF), kelly_spread(mu, sig, RF, MTF_RATE)
+
+    fig, ax = plt.subplots(figsize=(9, 4.6))
+    f = np.linspace(0, 4, 401)
+    ax.plot(f, growth_spread(f, mu, sig, RF, RF) * 100, color=plots.SERIES[0], lw=2,
+            label="borrow at 6.5%, like cash")
+    ax.plot(f, growth_spread(f, mu, sig, RF, MTF_RATE) * 100, color=plots.SERIES[1], lw=2,
+            label=f"borrow at Zerodha's MTF rate ({MTF_RATE:.1%})")
+    for kk, c in ((k_one, plots.SERIES[0]), (k_spread, plots.SERIES[1])):
+        rb = RF if c == plots.SERIES[0] else MTF_RATE
+        ax.plot([kk], [growth_spread(kk, mu, sig, RF, rb) * 100], "o", ms=7, color=c)
+    ax.axhline(RF * 100, color=plots.TEXT_2, lw=0.8, ls=":")
+    ax.set_ylim(0, 20)
+    ax.set_xlabel("fraction of wealth in NIFTY (above 1 = borrowing)")
+    ax.set_ylabel("expected growth a year, %, with hindsight")
+    ax.legend(loc="upper right", fontsize=8)
+    ax.set_title(f"Borrowing at {MTF_RATE:.1%} moved NIFTY's hindsight Kelly from "
+                 f"{k_one:.1f}× to {k_spread:.0f}×")
+    plots.save(fig, out_dir, "fric_spread")
+
+    x = r.loc[EVAL_START:]
+    years = (x.index[-1] - x.index[0]).days / 365.25
+
+    def run(target, rb=MTF_RATE, band=0.0, costs=True):
+        res = run_strategy(x, target.reindex(x.index), RF, rb, 1e6, band, costs)
+        g, d = _growth_dd(res["wealth"])
+        vol = float(np.log(res["wealth"]).diff().std() * np.sqrt(247))
+        return {"growth": g, "worst": d, "vol": vol, "avg f": float(res["fraction"].mean()),
+                "trades a year": res["trades"] / years, "costs a year": res["costs"] / years,
+                "wealth": res["wealth"]}
+
+    const = lambda v: pd.Series(v, index=r.index)  # noqa: E731
+    half = round(k_one / 2, 2)
+    lev = {"borrow at 6.5%, no costs": run(const(half), RF, costs=False),
+           "borrow at 14.6%, no costs": run(const(half), costs=False),
+           "+ ETF costs, reset daily": run(const(half)),
+           "+ ETF costs, reset beyond ±0.1": run(const(half), band=0.1)}
+    hold = run(const(1.0))
+    fig, ax = plt.subplots(figsize=(9, 4.6))
+    xb = np.arange(len(lev))
+    vals = [v["growth"] * 100 for v in lev.values()]
+    ax.bar(xb, vals, 0.6, color=[plots.SERIES[0], plots.SERIES[1], plots.SERIES[1],
+                                 plots.SERIES[1]])
+    for i, v in enumerate(vals):
+        ax.text(i, v + 0.2, f"{v:.1f}%", ha="center", fontsize=8)
+    ax.axhline(hold["growth"] * 100, color=plots.TEXT, lw=1.2, ls="--")
+    ax.text(len(lev) - 0.5, hold["growth"] * 100 + 0.25, f"hold 1×: {hold['growth']:.1%}",
+            ha="right", fontsize=8)
+    ax.set_xticks(xb, list(lev), fontsize=8)
+    ax.set_ylim(0, 16)
+    ax.set_ylabel("growth a year 2014–26, %")
+    ax.grid(axis="x", visible=False)
+    spread_cost = lev["borrow at 6.5%, no costs"]["growth"] - lev["borrow at 14.6%, no costs"][
+        "growth"]
+    ax.set_title(f"At {half}×, the 14.6% margin rate cost {spread_cost * 100:.1f} points a year; "
+                 f"daily trading {lev['+ ETF costs, reset daily']['costs a year'] * 100:.1f}")
+    plots.save(fig, out_dir, "fric_costs")
+
+    sig_next = ewma_vol(r).shift(-1).ffill()  # tomorrow's forecast from returns up to today
+    mu5 = r.rolling("1826D").mean() * st["per_year"]  # past five years' average return
+    dyn = {"hold 1×": hold,
+           "volatility target 16.5%, up to 1×": run((0.165 / sig_next).clip(upper=1), band=0.1),
+           "½ Kelly with EWMA volatility, up to 1×": run(
+               (0.5 * (mu5 - RF) / sig_next**2).clip(0, 1), band=0.1),
+           "volatility target 16.5%, up to 1.5×": run((0.165 / sig_next).clip(upper=1.5),
+                                                       band=0.1)}
+    fig, ax = plt.subplots(figsize=(9, 4.8))
+    for (n, v), c in zip(dyn.items(), (plots.TEXT, plots.SERIES[2], plots.SERIES[0],
+                                       plots.SERIES[1]), strict=True):
+        ax.plot(v["wealth"].index, v["wealth"].values, color=c, lw=1.6,
+                label=f"{n}: {v['growth']:.1%} a year, worst fall {v['worst']:.0%}")
+    ax.set_yscale("log")
+    ax.set_ylabel("wealth from ₹1 in January 2014 (log scale)")
+    _rupee_log(ax)
+    ax.legend(loc="upper left", fontsize=8)
+    vt = dyn["volatility target 16.5%, up to 1×"]
+    cost = (hold["growth"] - vt["growth"]) * 100
+    ax.set_title(f"Sizing by forecast volatility cut the worst fall from {-hold['worst']:.0%} to "
+                 f"{-vt['worst']:.0%} for {cost:.1f} points a year")
+    plots.save(fig, out_dir, "fric_voltarget")
+
+    keep = ("growth", "worst", "vol", "avg f", "trades a year", "costs a year")
+    return {
+        "NIFTY ETF 2009-26": {"mu": round(mu, 4), "sigma": round(sig, 4)},
+        "Kelly: one rate / lend 6.5% borrow 14.6%": (round(k_one, 2), round(k_spread, 2)),
+        "hindsight growth at Kelly": (f"{growth_spread(k_one, mu, sig, RF, RF):.1%}",
+                                      f"{growth_spread(k_spread, mu, sig, RF, MTF_RATE):.1%}"),
+        "half-Kelly constant fraction": half,
+        "2014-26 levered": {n: {kk: round(v[kk], 4) for kk in keep} for n, v in lev.items()},
+        "2014-26 dynamic": {n: {kk: round(v[kk], 4) for kk in keep} for n, v in dyn.items()},
+    }
+
+
 REPORTS = {"bets": report_bets, "stock": report_stock, "estimation": report_estimation,
-           "drawdown": report_drawdown, "multi": report_multi}
+           "drawdown": report_drawdown, "multi": report_multi, "frictions": report_frictions}
