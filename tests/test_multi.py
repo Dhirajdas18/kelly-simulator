@@ -71,3 +71,24 @@ def test_walk_forward_multi_is_monthly_past_only_and_bounded():
     cash = (1 + RF) ** ((d - prev).days / 365) - 1
     exp = wl[prev] * (1 + w.loc[d] @ W.loc[d] + (1 - w.loc[d].sum()) * cash)
     assert wl[d] == pytest.approx(exp)
+
+
+def test_weekly_asset_returns_blank_known_bad_prints(tmp_path):
+    nse = pd.bdate_range("2012-01-02", "2012-02-29")
+    prices = pd.DataFrame({"NIFTYBEES": 100.0, "GOLDBEES": 50.0}, index=nse)
+    glob = pd.DataFrame({"SP500TR": 1000.0, "USDINR": 50.0}, index=nse)
+    glob.loc["2012-01-27", "USDINR"] = 52.5  # a bad print on a Friday
+    fixes = tmp_path / "fixes.csv"
+    fixes.write_text("symbol,date,action,reason\nUSDINR,2012-01-27,blank,bad print\n")
+    w = weekly_asset_returns(prices, glob, fixes)
+    assert w["US (₹)"].abs().max() == pytest.approx(0.0)
+
+
+def test_fractional_capped_kelly_scales_the_position():
+    from ks.multi import fractional_kelly
+
+    full = capped_kelly(MU, COV, RF, max_gross=1.0)
+    half = fractional_kelly(MU, COV, RF, multiple=0.5, max_gross=1.0)
+    assert half == pytest.approx(0.5 * full, abs=1e-6)  # the cap binds: half the position
+    free = fractional_kelly(MU, COV, RF, multiple=0.5, max_gross=50.0)
+    assert free == pytest.approx(0.5 * kelly_weights(MU, COV, RF), abs=1e-3)

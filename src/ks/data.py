@@ -151,10 +151,17 @@ def fetch_global(start: str = START, end: str | None = None) -> pd.DataFrame:
     return raw[list(GLOBAL.values())].sort_index()
 
 
-def weekly_asset_returns(prices: pd.DataFrame, glob: pd.DataFrame) -> pd.DataFrame:
+def weekly_asset_returns(prices: pd.DataFrame, glob: pd.DataFrame,
+                        fixes: Path = FIXES) -> pd.DataFrame:
     """Friday-to-Friday returns of NIFTY (ETF), gold (ETF) and the US market in rupees; each
-    series takes its own last close of the week, so the NSE and US calendars needn't match."""
-    us = (glob["SP500TR"] * glob["USDINR"]).dropna()
+    series takes its own last close of the week, so the NSE and US calendars needn't match.
+    `blank` rows of the fixes file for the US table's columns drop those bad prints first."""
+    glob = glob.copy()
+    table = pd.read_csv(fixes, parse_dates=["date"])
+    for row in table[table["action"] == "blank"].itertuples():
+        if row.symbol in glob.columns and row.date in glob.index:
+            glob.loc[row.date, row.symbol] = float("nan")
+    us = (glob["SP500TR"] * glob["USDINR"].ffill()).dropna()
     cols = {"NIFTY": prices["NIFTYBEES"].dropna(), "gold": prices["GOLDBEES"].dropna(),
             "US (₹)": us}
     weekly = {k: v.resample("W-FRI").last() for k, v in cols.items()}
