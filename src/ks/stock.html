@@ -20,10 +20,12 @@
   const update = () => {
     const st = D.stats[sym.value][el("st-win").value];
     if (!st) { el("st-out").innerHTML = ""; Plotly.purge("st-chart"); el("st-note").textContent = "Not enough history in this window for this holding."; return; }
-    const [mu, sigma] = st, rf = D.rf, k = kellyContinuous(mu, sigma, rf);
+    const [mu, sigma, years] = st, rf = D.rf, k = kellyContinuous(mu, sigma, rf);
+    const best = optimalMultiple((mu - rf) / sigma, years);
     el("st-note").textContent = `Average return ${pct(mu)} a year, volatility ${pct(sigma)}, cash ${pct(rf)}; ` +
       `Sharpe ratio ${((mu - rf) / sigma).toFixed(2)}. Kelly’s fraction: ${k.toFixed(2)}` +
       (k <= 0 ? " — no edge over cash in this window: Kelly holds none." : k > 1 ? ` — borrow to hold ${k.toFixed(1)}× your money.` : ".") +
+      (k > 0 ? ` That average comes from ${years.toFixed(1)} years of data; with that much noise the best bet is ${best.toFixed(2)}× the estimate, ${(best * k).toFixed(2)} of your money.` : "") +
       ` Data to ${D.last}.`;
     const rows = [["None (all cash)", 0], ["Half Kelly", k / 2], ["Fully invested", 1], ["Kelly", k], ["Double Kelly", 2 * k]]
       .filter(([, f], i, a) => f >= 0 && a.findIndex(([, g]) => Math.abs(g - f) < 1e-9) === i);

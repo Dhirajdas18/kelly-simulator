@@ -50,3 +50,12 @@ def test_browser_continuous_kelly_matches_python():
     js = _node("[m.kellyContinuous(0.15, 0.2, 0.065), m.growthContinuous(1.5, 0.15, 0.2, 0.065)]")
     assert js == pytest.approx([kelly_continuous(0.15, 0.2, 0.065),
                                 growth_continuous(1.5, 0.15, 0.2, 0.065)], rel=1e-12)
+
+
+def test_browser_optimal_multiple_matches_python():
+    from ks.estimation import optimal_multiple
+
+    js = _node("[m.optimalMultiple(0.45, 5), m.optimalMultiple(-0.2, 3),"
+               " m.optimalMultiple(0.3, 17.9)]")
+    assert js == pytest.approx([optimal_multiple(0.45, 5), optimal_multiple(-0.2, 3),
+                                optimal_multiple(0.3, 17.9)], rel=1e-12)

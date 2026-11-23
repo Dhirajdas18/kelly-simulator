@@ -52,4 +52,7 @@ function quantile(sorted, q) {  // numpy's default (linear interpolation)
 function kellyContinuous(mu, sigma, rf) { return (mu - rf) / (sigma * sigma); }
 function growthContinuous(f, mu, sigma, rf) { return rf + f * (mu - rf) - f * f * sigma * sigma / 2; }
 
-if (typeof module !== "undefined") module.exports = { kellyFraction, growthRate, simulate, summarise, quantile, median, kellyContinuous, growthContinuous };
+// Best multiple of an estimated Kelly fraction with `years` of data (mirrors ks/estimation.py).
+function optimalMultiple(sharpe, years) { const x = sharpe * sharpe * years; return x / (x + 1); }
+
+if (typeof module !== "undefined") module.exports = { kellyFraction, growthRate, simulate, summarise, quantile, median, kellyContinuous, growthContinuous, optimalMultiple };

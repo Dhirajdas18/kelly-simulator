@@ -16,7 +16,7 @@ window and see what Kelly's fraction was. It runs in your browser.
 
 - [x] Repeated bets: growth against bet size, wealth paths, drawdown odds; in-browser simulator tested against Python through Node
 - [x] Kelly for a stock: f* = (μ − r)/σ² on NIFTY and the NIFTY 50, with a live per-stock calculator
-- [ ] Estimation error: Kelly from an estimated edge, walk-forward
+- [x] Estimation error: Kelly from an estimated edge, theory and walk-forward on NIFTY and 41 stocks
 - [ ] Drawdowns and time under full and fractional Kelly
 - [ ] Many assets: f = Σ⁻¹(μ − r), leverage and caps
 - [ ] Rebalancing frequency, costs, margin and fat tails; Kelly against volatility targeting
@@ -97,12 +97,51 @@ reset every day and cash or borrowing at 6.5% for the calendar days between clos
   ETF returns ranged from −3.8 (March 2020) to 9.1 (May 2023); it was below 0 on 12% of days and above 2 on
   66%. Section 3 tests what sizing from such estimates does out of sample.
 
+### 3. With 5 years of data the best bet was half the estimated Kelly; across 41 stocks, sizing from estimates lost to simply holding
+
+<a href="docs/img/est_theory.png"><picture><source media="(prefers-reduced-motion: reduce)" srcset="docs/img/est_theory.png"><img src="docs/img/est_theory.gif" alt="Expected growth above cash against the multiple of an estimated Kelly fraction, for estimates from 3, 5, 10 and 20 years and for a known edge" width="720"></picture></a>
+
+Kelly needs the average return, and an average estimated from T years of data is off by about σ/√T. That
+noise passes straight into the Kelly fraction. Betting c times the estimate, the expected growth above cash
+is c·S² − c²(S² + 1/T)/2 (S is the Sharpe ratio), which is largest at **c = S²T / (S²T + 1)**. For NIFTY's
+Sharpe of 0.45 (2009–2026):
+
+| Years of data | Best multiple of the estimate | Growth above cash at ½× | at 1× (full Kelly) |
+|---|---|---|---|
+| 3 | 0.38 | 3.5% | −6.5% |
+| 5 | **0.50** | 5.1% | 0.2% |
+| 10 | 0.67 | 6.4% | 5.2% |
+| 20 | 0.80 | 7.0% | 7.7% |
+| known exactly | 1.00 | 7.6% | 10.2% |
+
+- **Half Kelly falls out of the maths:** with 5 years of data the best multiple is exactly 0.50, and full
+  Kelly's expected growth is about the cash rate. A simulation (4,000 runs of 5 years) gave 5.2% above cash
+  at half and −0.05% at full, matching the formula.
+
+<table><tr>
+<td><a href="docs/img/est_nifty.png"><picture><source media="(prefers-reduced-motion: reduce)" srcset="docs/img/est_nifty.png"><img src="docs/img/est_nifty.gif" alt="NIFTY wealth from 2014 holding 1x against Kelly sized monthly from 5-year and 3-year estimates"></picture></a></td>
+<td><a href="docs/img/est_stocks.png"><picture><source media="(prefers-reduced-motion: reduce)" srcset="docs/img/est_stocks.png"><img src="docs/img/est_stocks.gif" alt="Median growth and median worst fall across 41 stocks for holding against Kelly sized from 3- and 5-year estimates"></picture></a></td>
+</tr></table>
+
+Walk-forward from January 2014 to November 2026: at each month end, estimate the average return and
+volatility from the past 3 or 5 years only, hold c times Kelly's fraction (between 0 and a 3× cap) for the
+next month, reset daily, borrowing or lending at 6.5%; no costs.
+
+- **NIFTY alone (left):** holding 1× made 11.7% a year (worst fall −36%). Full Kelly from 5-year estimates
+  made 14.4% (−50%), sitting at the 3× cap on 44% of days; from 3-year estimates it made 1.6% (−73%).
+  Half Kelly from 5 years made 9.7% (−35%). One path can't separate skill from luck: the formula expects
+  full Kelly on 5 years to earn about cash.
+- **41 stocks with prices from January 2009 (right):** the median stock grew 15.7% a year held at 1× (worst
+  fall −54%). Kelly from 5-year estimates: 9.9% at ¼× (−25%), 12.0% at ½× (−49%), 13.2% at 1× (−78%); it
+  beat holding on 2, 4 and 9 of the 41. From 3-year estimates growth was 9.3–10.3% and falls up to −82%.
+  These are today's NIFTY members, which favours holding them.
+
 ## Quick start
 
 ```bash
 uv sync
 uv run python scripts/fetch_data.py         # Yahoo Finance -> data/prices.parquet
-uv run ks report bets                       # also: stock; charts -> out/
+uv run ks report bets                       # also: stock, estimation; charts -> out/
 uv run python scripts/build_site.py         # simulator -> site/index.html
 uv run pytest
 ```
@@ -113,6 +152,8 @@ uv run pytest
   continuous-limit halving probability.
 - `src/ks/stock.py`: annual statistics from calendar time, Kelly's fraction and growth for a stock,
   realised growth of a daily-rebalanced levered position, and rolling Kelly estimates.
+- `src/ks/estimation.py`: the best multiple of an estimated Kelly fraction, its expected growth, a Monte
+  Carlo check, and a monthly walk-forward that sizes from past data only.
 - `src/ks/kelly.js`, `simulator.html`, `stock.html`: the same in the browser with a seeded generator; a test runs them
   through Node against Python.
 - `src/ks/data.py`: Yahoo prices for today's NIFTY 50, the index and two ETFs since 2007, with known errors

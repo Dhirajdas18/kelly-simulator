@@ -223,4 +223,125 @@ def report_stock(out_dir: Path) -> dict:
     }
 
 
-REPORTS = {"bets": report_bets, "stock": report_stock}
+def _growth_dd(w: pd.Series) -> tuple[float, float]:
+    years = (w.index[-1] - w.index[0]).days / 365.25
+    return float(np.log(w.iloc[-1]) / years), float((w / w.cummax() - 1).min())
+
+
+EVAL_START = "2014-01-01"  # five years after the ETF's first price, so every window is full
+CAP, FLOOR = 3.0, 0.0  # long only, at most 3× (a margin limit; section 6 prices it)
+
+
+def report_estimation(out_dir: Path) -> dict:
+    """Kelly from estimated returns: theory, NIFTY walk-forward and 41 stocks walk-forward."""
+    from ks.data import SYMBOLS
+    from ks.estimation import (
+        excess_growth_estimated,
+        optimal_multiple,
+        simulate_estimated_growth,
+        walk_forward,
+    )
+    from ks.stock import annual_stats
+
+    R = returns()
+    nifty = R["NIFTYBEES"].loc[START:].dropna()
+    s = annual_stats(nifty)
+    sharpe = (s["mu"] - RF) / s["sigma"]
+
+    fig, ax = plt.subplots(figsize=(9, 4.8))
+    cs = np.linspace(0, 1.6, 161)
+    for T, c in ((np.inf, plots.TEXT), (20, plots.SERIES[2]), (10, plots.SERIES[3]),
+                 (5, plots.SERIES[0]), (3, plots.SERIES[1])):
+        label = "known exactly" if np.isinf(T) else f"estimated from {T} years"
+        ax.plot(cs, excess_growth_estimated(cs, sharpe, T) * 100, color=c, lw=2, label=label)
+        best = optimal_multiple(sharpe, T)
+        ax.plot([best], [excess_growth_estimated(best, sharpe, T) * 100], "o", ms=6, color=c)
+    sim = {c: simulate_estimated_growth(c, s["mu"], s["sigma"], RF, 5, 4000, seed=1)
+           for c in (0.25, 0.5, 0.75, 1.0, 1.25)}
+    ax.plot(list(sim), [v * 100 for v in sim.values()], "s", ms=6, mfc="none",
+            color=plots.SERIES[0], label="5 years, simulated")
+    ax.axhline(0, color=plots.TEXT_2, lw=0.8)
+    ax.text(1.58, 0.3, "cash", ha="right", fontsize=8, color=plots.TEXT_2)
+    ax.set_ylim(-8, 13)
+    ax.set_xlabel("bet size, × the estimated Kelly fraction")
+    ax.set_ylabel("expected growth above cash, % a year")
+    ax.legend(loc="lower left", fontsize=8, title=f"NIFTY's average return ({sharpe:.2f} Sharpe)",
+              title_fontsize=8)
+    ax.set_title(f"With 5 years of data the best bet is {optimal_multiple(sharpe, 5):.2f}× Kelly; "
+                 "full Kelly earns about what cash does")
+    plots.save(fig, out_dir, "est_theory")
+
+    runs = {"hold NIFTY (1×)": walk_forward(nifty, RF, 1e-12, 5, 1.0, 1.0, EVAL_START)}
+    for win, c in ((5, 0.5), (5, 1.0), (3, 1.0)):
+        runs[f"{c:g}× Kelly, {win}-year estimate"] = walk_forward(nifty, RF, c, win, CAP, FLOOR,
+                                                                   EVAL_START)
+    fig, ax = plt.subplots(figsize=(9, 4.8))
+    for (k, res), col in zip(runs.items(), (plots.TEXT, plots.SERIES[2], plots.SERIES[0],
+                                            plots.SERIES[1]), strict=True):
+        g, d = _growth_dd(res["wealth"])
+        ax.plot(res["wealth"].index, res["wealth"].values, color=col, lw=1.6,
+                label=f"{k}: {g:.1%} a year, worst fall {d:.0%}")
+    ax.set_yscale("log")
+    ax.set_ylabel("wealth from ₹1 in January 2014 (log scale)")
+    ax.legend(loc="upper left", fontsize=8)
+    g5, _ = _growth_dd(runs["1× Kelly, 5-year estimate"]["wealth"])
+    g3, _ = _growth_dd(runs["1× Kelly, 3-year estimate"]["wealth"])
+    ax.set_title(f"On NIFTY alone, full Kelly made {g5:.1%} a year from 5-year estimates "
+                 f"and {g3:.1%} from 3-year ones")
+    plots.save(fig, out_dir, "est_nifty")
+
+    strategies = [(w, c) for w in (3, 5) for c in (0.25, 0.5, 1.0)]
+    rows = {}
+    for sym in SYMBOLS:
+        r = R[sym].loc[START:].dropna()
+        if r.empty or r.index[0] > pd.Timestamp(START) + pd.Timedelta(days=31):
+            continue
+        row = {"hold": _growth_dd(walk_forward(r, RF, 1e-12, 5, 1.0, 1.0, EVAL_START)["wealth"])}
+        for w, c in strategies:
+            row[(w, c)] = _growth_dd(walk_forward(r, RF, c, w, CAP, FLOOR, EVAL_START)["wealth"])
+        rows[sym] = row
+    keys = ["hold"] + strategies
+    med_g = {k: float(np.median([v[k][0] for v in rows.values()])) for k in keys}
+    med_d = {k: float(np.median([v[k][1] for v in rows.values()])) for k in keys}
+    beat = {k: int(sum(v[k][0] > v["hold"][0] for v in rows.values())) for k in strategies}
+    names = ["hold"] + [f"{c:g}× K\n{w}y" for w, c in strategies]
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(10, 4.6))
+    xs = np.arange(len(keys))
+    cols = [plots.TEXT] + [plots.SERIES[1]] * 3 + [plots.SERIES[0]] * 3
+    a1.bar(xs, [med_g[k] * 100 for k in keys], color=cols)
+    a2.bar(xs, [-med_d[k] * 100 for k in keys], color=cols)
+    for i, k in enumerate(keys):
+        a1.text(i, med_g[k] * 100 + 0.3, f"{med_g[k]:.1%}", ha="center", fontsize=7)
+        a2.text(i, -med_d[k] * 100 + 1, f"{-med_d[k]:.0%}", ha="center", fontsize=7)
+    for a, t in ((a1, "median growth a year, %"), (a2, "median worst fall, %")):
+        a.set_xticks(xs, names, fontsize=7)
+        a.set_title(t, fontsize=10, fontweight="normal")
+        a.grid(axis="x", visible=False)
+    fig.suptitle(f"Across {len(rows)} stocks, Kelly from estimates lost to holding: full Kelly "
+                 f"on 5 years beat it {beat[(5, 1.0)]} times", fontweight="bold")
+    plots.save(fig, out_dir, "est_stocks")
+
+    nf = {k: tuple(round(x, 3) for x in _growth_dd(res["wealth"])) for k, res in runs.items()}
+    return {
+        "NIFTY ETF 2009-26": {"mu": round(s["mu"], 4), "sigma": round(s["sigma"], 4),
+                              "Sharpe": round(sharpe, 3)},
+        "optimal multiple by years of data": {T: round(optimal_multiple(sharpe, T), 2)
+                                              for T in (3, 5, 10, 20)},
+        "expected excess growth % at 0.25/0.5/1/1.5×, by years": {
+            T: [round(excess_growth_estimated(c, sharpe, T) * 100, 2)
+                for c in (0.25, 0.5, 1.0, 1.5)] for T in (3, 5, 10, 20, np.inf)},
+        "simulated, 5 years": {c: round(v * 100, 2) for c, v in sim.items()},
+        "NIFTY walk-forward 2014-26 (growth, worst fall)": nf,
+        "NIFTY average fraction held": {k: round(float(res["fraction"].mean()), 2)
+                                        for k, res in runs.items()},
+        "NIFTY share of days at the 3× cap / at 0": {
+            k: (round(float((res["fraction"] >= CAP).mean()), 2),
+                round(float((res["fraction"] <= 0).mean()), 2)) for k, res in runs.items()},
+        "stocks": len(rows),
+        "stocks median growth": {str(k): round(v, 3) for k, v in med_g.items()},
+        "stocks median worst fall": {str(k): round(v, 3) for k, v in med_d.items()},
+        "stocks beating hold": {str(k): v for k, v in beat.items()},
+    }
+
+
+REPORTS = {"bets": report_bets, "stock": report_stock, "estimation": report_estimation}

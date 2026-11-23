@@ -21,7 +21,8 @@ def test_stock_data_has_each_window_from_calendar_time():
     nb = d["stats"]["NIFTYBEES"]
     r = _returns()["NIFTYBEES"]
     s = annual_stats(r[r.index > r.index[-1] - pd.DateOffset(years=3)])
-    assert nb["3y"] == pytest.approx([round(s["mu"], 5), round(s["sigma"], 5)])
+    assert nb["3y"] == pytest.approx([round(s["mu"], 5), round(s["sigma"], 5),
+                                      round(s["years"], 3)])
     assert d["stats"][SYMBOLS[0]]["5y"] is None and d["stats"][SYMBOLS[0]]["1y"] is not None
 
 

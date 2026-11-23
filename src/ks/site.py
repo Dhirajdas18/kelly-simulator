@@ -50,7 +50,7 @@ def stock_data(r: pd.DataFrame) -> dict:
                 stats[sym][key] = None
                 continue
             s = annual_stats(w)
-            stats[sym][key] = [round(s["mu"], 5), round(s["sigma"], 5)]
+            stats[sym][key] = [round(s["mu"], 5), round(s["sigma"], 5), round(s["years"], 3)]
     return {"symbols": symbols, "labels": LABELS, "rf": RF, "last": f"{end:%d %b %Y}",
             "stats": stats}
 
