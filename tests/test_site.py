@@ -26,7 +26,14 @@ def test_stock_data_has_each_window_from_calendar_time():
     assert d["stats"][SYMBOLS[0]]["5y"] is None and d["stats"][SYMBOLS[0]]["1y"] is not None
 
 
-def test_page_builds_with_both_sections():
+def test_page_builds_with_every_section(monkeypatch):
+    import ks.reports
+
+    idx = pd.date_range("2008-01-04", "2026-11-20", freq="W-FRI")
+    weekly = pd.DataFrame(np.random.default_rng(1).normal(0.002, 0.02, (len(idx), 3)), index=idx,
+                          columns=["NIFTY", "gold", "US (₹)"])
+    monkeypatch.setattr(ks.reports, "weekly_assets", lambda: weekly)  # no data files in CI
     html = build_html(_returns())
+    assert 'id="kelly-across-assets"' in html
     assert "function kellyContinuous" in html and 'id="kelly-for-a-stock"' in html
     assert "$" + "js" not in html and "$" + "data" not in html

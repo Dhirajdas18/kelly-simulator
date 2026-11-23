@@ -6,6 +6,7 @@ from pathlib import Path
 from string import Template
 
 import pandas as pd
+import plotly.graph_objects as go
 
 from ks import plots
 
@@ -59,6 +60,33 @@ def stock_section(data: pd.DataFrame) -> str:
     return STOCK.replace("$data", json.dumps(stock_data(data), separators=(",", ":")))
 
 
+
+def multi_figure(data: pd.DataFrame) -> go.Figure:
+    """Walk-forward wealth from 2014: Kelly across NIFTY, gold and the US against fixed mixes."""
+    from ks.multi import walk_forward_multi
+    from ks.reports import EVAL_START, RF, weekly_assets
+
+    W = weekly_assets()
+    runs = {"hold NIFTY": ([1, 0, 0], 1, 1), "equal thirds": ([1 / 3] * 3, 1, 1),
+            "½ Kelly, no borrowing": (None, 0.5, 1), "½ Kelly, up to 2×": (None, 0.5, 2),
+            "Kelly, up to 3×": (None, 1, 3)}
+    colors = [plots.TEXT, plots.SERIES[2], plots.SERIES[0], plots.SERIES[3], plots.SERIES[1]]
+    fig = go.Figure()
+    for (name, (fixed, c, cap)), col in zip(runs.items(), colors, strict=True):
+        w = walk_forward_multi(W, RF, c, 5, cap, EVAL_START, fixed)["wealth"]
+        fig.add_scatter(x=list(w.index.strftime("%Y-%m-%d")), y=w.round(4).tolist(), name=name,
+                        mode="lines", line=dict(color=col, width=2),
+                        hovertemplate=f"{name}: ₹%{{y:.2f}}<extra></extra>")
+    fig.update_layout(paper_bgcolor=plots.SURFACE, plot_bgcolor=plots.SURFACE,
+                      font=dict(family=FONT, color=plots.TEXT_2, size=13), hovermode="x unified",
+                      margin=dict(l=56, r=16, t=56, b=40),
+                      legend=dict(orientation="h", y=1.02, yanchor="bottom", x=0),
+                      xaxis=dict(gridcolor=plots.GRID),
+                      yaxis=dict(title="wealth from ₹1 in January 2014", type="log",
+                                 gridcolor=plots.GRID))
+    return fig
+
+
 SECTIONS = [
     ("Kelly simulator",
      "A repeated bet: you win the stated amount per ₹1 staked with the chosen chance, otherwise "
@@ -72,6 +100,11 @@ SECTIONS = [
      "variance. Pick a holding and a window: the numbers come from that window’s daily returns, "
      "so they show what Kelly would have said with hindsight, not a forecast.",
      stock_section),
+    ("Kelly across assets",
+     "NIFTY, gold and the US market in rupees. Each month, Kelly’s weights are estimated from the "
+     "past five years of weekly returns only and held for the next month; cash or borrowing at "
+     "6.5%, no costs. Equal thirds, rebalanced monthly, is the plain alternative.",
+     multi_figure),
 ]
 
 

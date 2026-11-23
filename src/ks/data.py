@@ -21,6 +21,8 @@ VIX = "INDIAVIX"
 ETFS = ["NIFTYBEES", "GOLDBEES"]  # NIFTY 50 with dividends; gold in rupees
 START = "2007-01-01"  # includes 2008
 DATA_PATH = ROOT / "data" / "prices.parquet"
+GLOBAL_PATH = ROOT / "data" / "global.parquet"  # US market and the rupee, on the US calendar
+GLOBAL = {"^SP500TR": "SP500TR", "INR=X": "USDINR"}  # S&P 500 total return (USD); rupees per $
 FIELDS = {"Open": "open", "High": "high", "Low": "low", "Close": "close", "Adj Close": "adj_close"}
 
 
@@ -136,3 +138,24 @@ def daily_returns(prices: pd.DataFrame, fixes: Path = FIXES) -> pd.DataFrame:
         if row.symbol in r.columns and row.date in r.index:
             r.loc[row.date, row.symbol] = 0.0
     return r
+
+
+def fetch_global(start: str = START, end: str | None = None) -> pd.DataFrame:
+    """S&P 500 total-return index and USD/INR closes. Kept apart from the NSE table: merging the
+    two calendars would put US-only dates (and fake zero returns) into every NSE series."""
+    import yfinance as yf
+
+    raw = yf.download(list(GLOBAL), start=start, end=end, auto_adjust=False, progress=False,
+                      threads=False)["Close"].rename(columns=GLOBAL)
+    raw.index = pd.DatetimeIndex(raw.index.tz_localize(None), name="date")
+    return raw[list(GLOBAL.values())].sort_index()
+
+
+def weekly_asset_returns(prices: pd.DataFrame, glob: pd.DataFrame) -> pd.DataFrame:
+    """Friday-to-Friday returns of NIFTY (ETF), gold (ETF) and the US market in rupees; each
+    series takes its own last close of the week, so the NSE and US calendars needn't match."""
+    us = (glob["SP500TR"] * glob["USDINR"]).dropna()
+    cols = {"NIFTY": prices["NIFTYBEES"].dropna(), "gold": prices["GOLDBEES"].dropna(),
+            "US (₹)": us}
+    weekly = {k: v.resample("W-FRI").last() for k, v in cols.items()}
+    return pd.DataFrame({k: v.pct_change(fill_method=None) for k, v in weekly.items()}).dropna()

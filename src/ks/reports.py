@@ -474,5 +474,108 @@ def report_drawdown(out_dir: Path) -> dict:
     }
 
 
+def weekly_assets() -> pd.DataFrame:
+    """Weekly returns of NIFTY (ETF), gold (ETF) and the US market in rupees since January 2009,
+    from the repaired NSE prices and the US/rupee table."""
+    from ks.data import DATA_PATH, GLOBAL_PATH, daily_returns, weekly_asset_returns
+
+    px = pd.read_parquet(DATA_PATH)["adj_close"][["NIFTYBEES", "GOLDBEES"]]
+    repaired = (1 + daily_returns(px).fillna(0)).cumprod().where(px.notna())
+    return weekly_asset_returns(repaired, pd.read_parquet(GLOBAL_PATH)).loc[START:]
+
+
+def report_multi(out_dir: Path) -> dict:
+    """Kelly across NIFTY, gold and the US: hindsight weights, growth, and a walk-forward."""
+    from ks.multi import capped_kelly, growth_multi, kelly_weights, tangency, walk_forward_multi
+
+    W = weekly_assets()
+    years = (W.index[-1] - W.index[0]).days / 365.25
+    per_year = (len(W) - 1) / years
+    mu, cov = W.mean().to_numpy() * per_year, W.cov().to_numpy() * per_year
+    names = list(W.columns)
+    k = kelly_weights(mu, cov, RF)
+    tan = tangency(mu, cov, RF)
+    s_tan = float(tan @ (mu - RF) / np.sqrt(tan @ cov @ tan))
+    variants = {"Kelly": k, "½ Kelly": k / 2,
+                "best with no borrowing": capped_kelly(mu, cov, RF, 1),
+                "½ Kelly, no borrowing": capped_kelly(mu, cov / 0.5, RF, 1)}
+
+    fig, ax = plt.subplots(figsize=(9, 4.6))
+    xb = np.arange(len(variants))
+    cols = (plots.SERIES[0], plots.SERIES[3], plots.SERIES[2])
+    for j, (a, c) in enumerate(zip(names, cols, strict=True)):
+        vals = [v[j] for v in variants.values()]
+        ax.bar(xb - 0.27 + 0.27 * j, vals, 0.25, color=c, label=a)
+        for i, v in enumerate(vals):
+            ax.text(i - 0.27 + 0.27 * j, v + 0.06, f"{v:.2f}", ha="center", fontsize=7)
+    ax.set_xticks(xb, [f"{n}\n(total {v.sum():.2f}×)" for n, v in variants.items()])
+    ax.set_ylabel("fraction of wealth (above 1 in total = borrowing)")
+    ax.grid(axis="x", visible=False)
+    ax.legend(loc="upper right", fontsize=8)
+    ax.set_title(f"With hindsight Kelly held {k.sum():.1f}× across NIFTY, gold and the US; "
+                 "unborrowed, all US")
+    plots.save(fig, out_dir, "multi_weights")
+
+    fig, ax = plt.subplots(figsize=(9, 4.6))
+    lev = np.linspace(0, 12, 241)
+    ax.plot(lev, [growth_multi(L * tan, mu, cov, RF) * 100 for L in lev], color=plots.SERIES[0],
+            lw=2, label="tangency mix (" + ", ".join(
+                f"{a} {w:.0%}" for a, w in zip(names, tan, strict=True)) + ")")
+    kn = (mu[0] - RF) / cov[0, 0]
+    ax.plot(lev, [growth_multi(np.array([L, 0, 0]), mu, cov, RF) * 100 for L in lev],
+            color=plots.SERIES[1], lw=2, label="NIFTY alone")
+    ax.plot([k.sum()], [growth_multi(k, mu, cov, RF) * 100], "o", ms=7, color=plots.SERIES[0])
+    ax.plot([kn], [growth_multi(np.array([kn, 0, 0]), mu, cov, RF) * 100], "o", ms=7,
+            color=plots.SERIES[1])
+    ax.axhline(RF * 100, color=plots.TEXT_2, lw=0.8, ls=":")
+    ax.set_ylim(-10, 50)
+    ax.set_xlabel("total exposure, × wealth (above 1 = borrowing at 6.5%)")
+    ax.set_ylabel("expected growth a year, % (log), with hindsight")
+    ax.legend(loc="upper right", fontsize=8)
+    gk, gn = growth_multi(k, mu, cov, RF), growth_multi(np.array([kn, 0, 0]), mu, cov, RF)
+    ax.set_title(f"Mixing raised Kelly's hindsight growth from {gn:.0%} to {gk:.0%} "
+                 f"({k.sum():.1f}× leverage, not {kn:.1f}×)")
+    plots.save(fig, out_dir, "multi_growth")
+
+    runs = {"hold NIFTY": dict(fixed=[1, 0, 0]), "equal thirds": dict(fixed=[1 / 3] * 3),
+            "½ Kelly, no borrowing": dict(multiple=0.5, max_gross=1.0),
+            "½ Kelly, up to 2×": dict(multiple=0.5, max_gross=2.0),
+            "Kelly, up to 3×": dict(multiple=1.0, max_gross=3.0)}
+    res = {n: walk_forward_multi(W, RF, a.get("multiple", 1.0), 5, a.get("max_gross", 1.0),
+                                 EVAL_START, a.get("fixed")) for n, a in runs.items()}
+    fig, ax = plt.subplots(figsize=(9, 4.8))
+    for (n, r_), c in zip(res.items(), (plots.TEXT, plots.SERIES[2], plots.SERIES[0],
+                                        plots.SERIES[3], plots.SERIES[1]), strict=True):
+        g, d = _growth_dd(r_["wealth"])
+        ax.plot(r_["wealth"].index, r_["wealth"].values, color=c, lw=1.6,
+                label=f"{n}: {g:.1%} a year, worst fall {d:.0%}")
+    ax.set_yscale("log")
+    ax.set_ylabel("wealth from ₹1 in January 2014 (log scale)")
+    ax.legend(loc="upper left", fontsize=8)
+    g3, _ = _growth_dd(res["equal thirds"]["wealth"])
+    gh, _ = _growth_dd(res["½ Kelly, no borrowing"]["wealth"])
+    ax.set_title(f"Out of sample, equal thirds made {g3:.1%} a year; half Kelly from 5-year "
+                 f"estimates {gh:.1%}")
+    plots.save(fig, out_dir, "multi_walk")
+
+    return {
+        "weekly 2009-26": {"weeks": len(W), "per year": round(per_year, 2)},
+        "mean / vol": {a: (f"{m:.1%}", f"{np.sqrt(v):.1%}") for a, m, v in
+                       zip(names, mu, np.diag(cov), strict=True)},
+        "correlation": W.corr().round(2).to_dict(),
+        "hindsight weights": {n: dict(zip(names, np.round(v, 2), strict=True))
+                              for n, v in variants.items()},
+        "hindsight growth": {n: f"{growth_multi(v, mu, cov, RF):.1%}" for n, v in variants.items()},
+        "tangency": dict(zip(names, np.round(tan, 3), strict=True)),
+        "tangency Sharpe, NIFTY Sharpe": (round(s_tan, 3),
+                                          round((mu[0] - RF) / np.sqrt(cov[0, 0]), 3)),
+        "NIFTY-alone Kelly and growth": (round(kn, 2), f"{gn:.1%}"),
+        "walk-forward 2014-26 (growth, worst fall, average weights, average total)": {
+            n: (*(round(x, 3) for x in _growth_dd(r_["wealth"])),
+                r_["weights"].mean().round(2).to_dict(),
+                round(float(r_["weights"].sum(axis=1).mean()), 2)) for n, r_ in res.items()},
+    }
+
+
 REPORTS = {"bets": report_bets, "stock": report_stock, "estimation": report_estimation,
-           "drawdown": report_drawdown}
+           "drawdown": report_drawdown, "multi": report_multi}

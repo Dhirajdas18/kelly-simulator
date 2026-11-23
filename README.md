@@ -18,7 +18,7 @@ window and see what Kelly's fraction was. It runs in your browser.
 - [x] Kelly for a stock: f* = (μ − r)/σ² on NIFTY and the NIFTY 50, with a live per-stock calculator
 - [x] Estimation error: Kelly from an estimated edge, theory and walk-forward on NIFTY and 41 stocks
 - [x] Drawdowns and time under full and fractional Kelly
-- [ ] Many assets: f = Σ⁻¹(μ − r), leverage and caps
+- [x] Many assets: f = Σ⁻¹(μ − r) on NIFTY, gold and the US, hindsight and walk-forward
 - [ ] Rebalancing frequency, costs, margin and fat tails; Kelly against volatility targeting
 - [ ] Sizing a trading signal from calibrated win rates and payoffs
 
@@ -173,12 +173,53 @@ is ahead after T years is **Φ(√T · S · (1 − (c1 + c2)/2))**, with S the S
   borrowing at 6.5%, the worst fall was −75% (23 March 2020) against −47% at half Kelly and −36% holding 1×.
   The longest spells below a previous peak were 3.8, 3.5 and 3.0 years.
 
+### 5. Across NIFTY, gold and the US, hindsight Kelly wanted 8× leverage; out of sample, equal thirds beat half Kelly at the same exposure
+
+<a href="docs/img/multi_walk.png"><picture><source media="(prefers-reduced-motion: reduce)" srcset="docs/img/multi_walk.png"><img src="docs/img/multi_walk.gif" alt="Wealth from 2014 for holding NIFTY, equal thirds and Kelly sized monthly across NIFTY, gold and the US" width="720"></picture></a>
+
+With several assets Kelly's weights are **w = Σ⁻¹(μ − r)**: the covariance matrix inverted, times each
+asset's return above cash. Scaled to add up to 1, they are the tangency portfolio, the highest-Sharpe mix;
+Kelly holds that mix with leverage equal to the weights' total, and its growth is r + ½·(the mix's Sharpe)².
+Three assets in rupees, weekly returns January 2009 to November 2026 (934 weeks): NIFTY (ETF), gold (ETF)
+and the US market (S&P 500 total return × USD/INR, both from Yahoo). Cash at 6.5%.
+
+| 2009–2026 | NIFTY | gold | US (₹) |
+|---|---|---|---|
+| average return / volatility | 13.9% / 16.5% | 12.4% / 14.3% | 18.4% / 16.5% |
+| correlation with NIFTY | — | −0.06 | 0.33 |
+| hindsight Kelly weight | 1.65 | 2.73 | 3.64 |
+
+- **Hindsight Kelly borrowed 7 times its wealth:** the weights total 8.0×. The tangency mix (NIFTY 21%,
+  gold 34%, US 45%) had a Sharpe of 0.85 against NIFTY's 0.45, so the formula's best growth rose from 17%
+  (NIFTY alone at 2.7×) to 42% a year. Without borrowing, the best hindsight mix was 100% US.
+
+<table><tr>
+<td><a href="docs/img/multi_weights.png"><picture><source media="(prefers-reduced-motion: reduce)" srcset="docs/img/multi_weights.png"><img src="docs/img/multi_weights.gif" alt="Hindsight Kelly weights for NIFTY, gold and the US, unconstrained, halved and without borrowing"></picture></a></td>
+<td><a href="docs/img/multi_growth.png"><picture><source media="(prefers-reduced-motion: reduce)" srcset="docs/img/multi_growth.png"><img src="docs/img/multi_growth.gif" alt="Expected growth against total exposure for the tangency mix and for NIFTY alone"></picture></a></td>
+</tr></table>
+
+Walk-forward (chart at top): each month, Kelly's weights estimated from the past 5 years of weekly returns
+only, long only, held through the next month; no costs.
+
+| January 2014 – November 2026 | Growth a year | Worst fall | Average weights (NIFTY / gold / US) |
+|---|---|---|---|
+| hold NIFTY | 11.8% | −34% | 1 / 0 / 0 |
+| **equal thirds**, rebalanced monthly | **13.2%** | **−20%** | 0.33 / 0.33 / 0.33 |
+| ½ Kelly, no borrowing | 10.1% | −27% | 0.08 / 0.13 / 0.78 |
+| ½ Kelly, up to 2× | 14.1% | −44% | 0.27 / 0.40 / 1.33 |
+| Kelly, up to 3× | 12.2% | −63% | 0.33 / 0.53 / 2.14 |
+
+- **At the same exposure, the plain mix won:** without borrowing, equal thirds grew 3.1 points a year faster
+  than half Kelly's estimated weights, with a shallower worst fall. Half Kelly averaged 78% in the US.
+- **Leverage bought little:** half Kelly at up to 2× added 0.9 points over equal thirds for a worst fall of
+  −44% instead of −20%; full Kelly at up to 3× grew less than equal thirds and fell −63%.
+
 ## Quick start
 
 ```bash
 uv sync
 uv run python scripts/fetch_data.py         # Yahoo Finance -> data/prices.parquet
-uv run ks report bets                       # also: stock, estimation, drawdown
+uv run ks report bets                       # also: stock, estimation, drawdown, multi
 uv run python scripts/build_site.py         # simulator -> site/index.html
 uv run pytest
 ```
@@ -193,10 +234,13 @@ uv run pytest
   Carlo check, and a monthly walk-forward that sizes from past data only.
 - `src/ks/drawdown.py`: drawdowns, longest time below a peak, the chance one bet size is ahead of
   another after T years (and the years needed for a given confidence), and simulated wealth paths.
+- `src/ks/multi.py`: Kelly weights Σ⁻¹(μ − r), growth, the tangency portfolio, long-only Kelly with a
+  leverage cap, and a monthly walk-forward on weekly returns.
 - `src/ks/kelly.js`, `simulator.html`, `stock.html`: the same in the browser with a seeded generator; a test runs them
   through Node against Python.
 - `src/ks/data.py`: Yahoo prices for today's NIFTY 50, the index and two ETFs since 2007, with known errors
-  repaired from `docs/data/yahoo_fixes.csv` (for the topics that use market data).
+  repaired from `docs/data/yahoo_fixes.csv`; the S&P 500 total-return index and USD/INR kept in a separate
+  table (US calendar), joined on weekly closes.
 - `src/ks/reports.py`: README findings, reproducible with `ks report <topic>`.
 - `src/ks/site.py`, `page.html`: the dashboard, one static page; no server.
 

@@ -6,8 +6,10 @@ from pathlib import Path
 
 from ks.data import (
     DATA_PATH,
+    GLOBAL_PATH,
     INDEX,
     SYMBOLS,
+    fetch_global,
     fetch_yfinance,
     flag_adjusted_drops,
     missing_symbols,
@@ -35,6 +37,11 @@ def main() -> None:
     print(f"Yahoo Finance: {len(df)} rows, {span} -> {out}")
     for sym, date in flag_adjusted_drops(df["adj_close"][SYMBOLS + [INDEX]]):
         print(f"  check {sym} {date:%Y-%m-%d}: adjusted price fell >20% in a day")
+    glob = fetch_global()
+    if glob.isna().all().any():
+        sys.exit("download failed for the US index or USD/INR")
+    glob.to_parquet(GLOBAL_PATH)
+    print(f"Yahoo Finance: US index and USD/INR, {len(glob)} rows -> {GLOBAL_PATH}")
 
 
 if __name__ == "__main__":
