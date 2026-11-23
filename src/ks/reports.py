@@ -344,4 +344,135 @@ def report_estimation(out_dir: Path) -> dict:
     }
 
 
-REPORTS = {"bets": report_bets, "stock": report_stock, "estimation": report_estimation}
+def _levered_wealth(r: pd.Series, f: float, rf: float) -> pd.Series:
+    """₹1 held at fraction f, reset daily, cash or borrowing at rf for the days between closes."""
+    days = r.index.to_series().diff().dt.days.fillna(0).to_numpy()
+    gross = 1 + f * r.fillna(0).to_numpy() + (1 - f) * ((1 + rf) ** (days / 365) - 1)
+    gross[0] = 1.0
+    return pd.Series(np.cumprod(np.maximum(gross, 0)), index=r.index)
+
+
+def _runs(underwater: np.ndarray) -> int:
+    """Longest run of True in a boolean array."""
+    if not underwater.any():
+        return 0
+    edges = np.diff(np.concatenate(([0], underwater.astype(np.int8), [0])))
+    return int((np.flatnonzero(edges == -1) - np.flatnonzero(edges == 1)).max())
+
+
+def report_drawdown(out_dir: Path) -> dict:
+    """How deep and how long the falls are at each bet size, and how long Kelly takes to win."""
+    from ks.drawdown import (
+        PER_YEAR,
+        drawdown,
+        longest_underwater,
+        prob_ahead,
+        simulate_log_wealth,
+        years_to_confidence,
+    )
+    from ks.stock import annual_stats, kelly_continuous
+
+    R = returns()
+    nifty = R["NIFTYBEES"].loc[START:].dropna()
+    st = annual_stats(nifty)
+    mu, sig = st["mu"], st["sigma"]
+    S = (mu - RF) / sig
+    k = kelly_continuous(mu, sig, RF)
+    hold = 1 / k  # holding NIFTY fully invested, as a multiple of Kelly
+
+    fig, ax = plt.subplots(figsize=(9, 4.6))
+    T = np.linspace(0.25, 150, 600)
+    for c2, col, name in ((0.5, plots.SERIES[2], "half Kelly"),
+                          (hold, plots.TEXT, f"holding NIFTY 1× ({hold:.2f}× Kelly)")):
+        ax.plot(T, [prob_ahead(1.0, c2, S, t) * 100 for t in T], color=col, lw=2,
+                label=f"Kelly ahead of {name}")
+        y95 = years_to_confidence(1.0, c2, S, 0.95)
+        if y95 <= 150:
+            ax.plot([y95], [95], "o", ms=6, color=col)
+            ax.annotate(f"{y95:.0f} years", (y95, 95), xytext=(-4, -16), textcoords="offset points",
+                        ha="right", fontsize=8, color=plots.TEXT_2)
+    ax.axhline(95, color=plots.TEXT_2, lw=0.8, ls=":")
+    ax.set_ylim(48, 100)
+    ax.set_xlabel("years")
+    ax.set_ylabel("chance Kelly has more money, %")
+    ax.legend(loc="lower right", fontsize=8, title=f"NIFTY's 2009–26 return and risk known exactly "
+              f"(Sharpe {S:.2f})", title_fontsize=8)
+    y_hold = years_to_confidence(1.0, hold, S, 0.95)
+    ax.set_title(f"Kelly needs {y_hold:.0f} years to beat simply holding NIFTY with 95% confidence")
+    plots.save(fig, out_dir, "dd_ahead")
+
+    years, n = 20, 2000
+    mults = {"¼ Kelly": 0.25, "½ Kelly": 0.5, "hold 1×": hold, "Kelly": 1.0, "1.5× Kelly": 1.5}
+    sims = {}
+    for name, c in mults.items():
+        lw = simulate_log_wealth(c * k, mu, sig, RF, years, n, seed=11)
+        peak = np.maximum.accumulate(lw, axis=1)
+        dd = np.exp(lw - peak) - 1
+        sims[name] = {
+            "max dd": dd.min(axis=1),
+            "underwater years": np.array([_runs(row < -1e-9) for row in dd]) / PER_YEAR,
+            "final growth": lw[:, -1] / years,
+        }
+        del lw, peak, dd
+    fig, ax = plt.subplots(figsize=(9, 4.6))
+    xb = np.arange(len(mults))
+    levels = ((0.3, plots.SERIES[3]), (0.5, plots.SERIES[1]), (0.7, plots.SERIES[7]))
+    for j, (lvl, col) in enumerate(levels):
+        vals = [float((sims[m]["max dd"] <= -lvl).mean()) * 100 for m in mults]
+        ax.bar(xb - 0.27 + 0.27 * j, vals, 0.25, color=col,
+               label=f"fell {lvl:.0%} or more from a peak")
+        for i, v in enumerate(vals):
+            ax.text(i - 0.27 + 0.27 * j, v + 1.5, f"{v:.0f}", ha="center", fontsize=7)
+    ax.set_xticks(xb, list(mults))
+    ax.set_ylim(0, 125)
+    ax.set_ylabel(f"% of {n:,} simulated 20-year paths")
+    ax.grid(axis="x", visible=False)
+    ax.legend(loc="upper center", fontsize=8, ncol=3)
+    p50 = {m: float((sims[m]["max dd"] <= -0.5).mean()) for m in mults}
+    ax.set_title(f"Over 20 years, Kelly fell 50% from a peak on {p50['Kelly']:.0%} of paths; "
+                 f"half Kelly on {p50['½ Kelly']:.0%}")
+    plots.save(fig, out_dir, "dd_depth")
+
+    real = {"hold 1×": 1.0, "½ Kelly": 0.5 * k, "Kelly": k}
+    wealth = {m: _levered_wealth(nifty, f, RF) for m, f in real.items()}
+    fig, ax = plt.subplots(figsize=(9, 4.6))
+    for (m, w), col in zip(wealth.items(), (plots.TEXT, plots.SERIES[2], plots.SERIES[0]),
+                           strict=True):
+        d = drawdown(w)
+        ax.plot(d.index, d.values * 100, color=col, lw=1.3,
+                label=f"{m} ({real[m]:.2f}×): worst {d.min():.0%}, longest "
+                      f"{longest_underwater(w):.1f} years below a peak")
+    ax.set_ylabel("below the previous peak, %")
+    ax.set_ylim(-100, 3)
+    ax.legend(loc="lower left", fontsize=8)
+    ax.set_title(f"On NIFTY since 2009, hindsight Kelly ({k:.2f}×) fell "
+                 f"{-drawdown(wealth['Kelly']).min():.0%} in 2020")
+    plots.save(fig, out_dir, "dd_nifty")
+
+    return {
+        "NIFTY ETF": {"mu": round(mu, 4), "sigma": round(sig, 4), "Sharpe": round(S, 3),
+                      "Kelly": round(k, 2), "hold as × Kelly": round(hold, 3)},
+        "years to 90/95% that Kelly beats ½ Kelly": (
+            round(years_to_confidence(1, 0.5, S, 0.9)), round(years_to_confidence(1, 0.5, S))),
+        "years to 90/95% that Kelly beats holding 1×": (
+            round(years_to_confidence(1, hold, S, 0.9)), round(years_to_confidence(1, hold, S))),
+        "P(Kelly ahead of ½K / hold) at 5, 10, 20, 50 years": {
+            t: (round(prob_ahead(1, 0.5, S, t), 2), round(prob_ahead(1, hold, S, t), 2))
+            for t in (5, 10, 20, 50)},
+        "simulated 20y: P(fell ≥30/50/70%), median worst, median longest underwater (y), "
+        "median growth": {
+            m: (f"{(v['max dd'] <= -0.3).mean():.0%}", f"{(v['max dd'] <= -0.5).mean():.0%}",
+                f"{(v['max dd'] <= -0.7).mean():.0%}", f"{np.median(v['max dd']):.0%}",
+                round(float(np.median(v["underwater years"])), 1),
+                f"{np.median(v['final growth']):.1%}") for m, v in sims.items()},
+        "simulated 20y: Kelly ahead of ½K / hold (share of paths)": (
+            f"{(sims['Kelly']['final growth'] > sims['½ Kelly']['final growth']).mean():.0%}",
+            f"{(sims['Kelly']['final growth'] > sims['hold 1×']['final growth']).mean():.0%}"),
+        "NIFTY 2009-26 (worst fall, its date, longest underwater y)": {
+            m: (f"{drawdown(w).min():.0%}", f"{drawdown(w).idxmin():%d %b %Y}",
+                round(longest_underwater(w), 1)) for m, w in wealth.items()},
+    }
+
+
+REPORTS = {"bets": report_bets, "stock": report_stock, "estimation": report_estimation,
+           "drawdown": report_drawdown}

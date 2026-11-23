@@ -55,4 +55,7 @@ function growthContinuous(f, mu, sigma, rf) { return rf + f * (mu - rf) - f * f 
 // Best multiple of an estimated Kelly fraction with `years` of data (mirrors ks/estimation.py).
 function optimalMultiple(sharpe, years) { const x = sharpe * sharpe * years; return x / (x + 1); }
 
-if (typeof module !== "undefined") module.exports = { kellyFraction, growthRate, simulate, summarise, quantile, median, kellyContinuous, growthContinuous, optimalMultiple };
+// Years until c1 × Kelly beats c2 × Kelly with 95% confidence (mirrors ks/drawdown.py).
+function yearsToConfidence(c1, c2, sharpe) { const z = 1.6448536269514722; return (z / (sharpe * Math.abs(1 - (c1 + c2) / 2))) ** 2; }
+
+if (typeof module !== "undefined") module.exports = { kellyFraction, growthRate, simulate, summarise, quantile, median, kellyContinuous, growthContinuous, optimalMultiple, yearsToConfidence };

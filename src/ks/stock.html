@@ -26,6 +26,7 @@
       `Sharpe ratio ${((mu - rf) / sigma).toFixed(2)}. Kelly’s fraction: ${k.toFixed(2)}` +
       (k <= 0 ? " — no edge over cash in this window: Kelly holds none." : k > 1 ? ` — borrow to hold ${k.toFixed(1)}× your money.` : ".") +
       (k > 0 ? ` That average comes from ${years.toFixed(1)} years of data; with that much noise the best bet is ${best.toFixed(2)}× the estimate, ${(best * k).toFixed(2)} of your money.` : "") +
+      (k > 0 ? ` Even if that average were exact, Kelly would need ${Math.round(yearsToConfidence(1, 0.5, (mu - rf) / sigma))} years to beat half Kelly with 95% confidence.` : "") +
       ` Data to ${D.last}.`;
     const rows = [["None (all cash)", 0], ["Half Kelly", k / 2], ["Fully invested", 1], ["Kelly", k], ["Double Kelly", 2 * k]]
       .filter(([, f], i, a) => f >= 0 && a.findIndex(([, g]) => Math.abs(g - f) < 1e-9) === i);

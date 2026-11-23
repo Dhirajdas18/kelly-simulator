@@ -17,7 +17,7 @@ window and see what Kelly's fraction was. It runs in your browser.
 - [x] Repeated bets: growth against bet size, wealth paths, drawdown odds; in-browser simulator tested against Python through Node
 - [x] Kelly for a stock: f* = (μ − r)/σ² on NIFTY and the NIFTY 50, with a live per-stock calculator
 - [x] Estimation error: Kelly from an estimated edge, theory and walk-forward on NIFTY and 41 stocks
-- [ ] Drawdowns and time under full and fractional Kelly
+- [x] Drawdowns and time under full and fractional Kelly
 - [ ] Many assets: f = Σ⁻¹(μ − r), leverage and caps
 - [ ] Rebalancing frequency, costs, margin and fat tails; Kelly against volatility targeting
 - [ ] Sizing a trading signal from calibrated win rates and payoffs
@@ -136,12 +136,49 @@ next month, reset daily, borrowing or lending at 6.5%; no costs.
   beat holding on 2, 4 and 9 of the 41. From 3-year estimates growth was 9.3–10.3% and falls up to −82%.
   These are today's NIFTY members, which favours holding them.
 
+### 4. Even with NIFTY's return known exactly, Kelly needs 132 years to beat simply holding with 95% confidence, and every simulated Kelly path halved from a peak within 20 years
+
+<a href="docs/img/dd_ahead.png"><picture><source media="(prefers-reduced-motion: reduce)" srcset="docs/img/dd_ahead.png"><img src="docs/img/dd_ahead.gif" alt="Chance that Kelly has more money than half Kelly or than holding NIFTY, against years" width="720"></picture></a>
+
+This section assumes the best case for Kelly: NIFTY's 2009–2026 average return (13.9%) and volatility
+(16.5%) are known exactly, so Kelly's fraction is 2.74 and holding NIFTY fully invested is 0.37× Kelly. Two
+bet sizes c1 > c2 on the same asset end up a normally distributed amount apart, so the chance the bigger one
+is ahead after T years is **Φ(√T · S · (1 − (c1 + c2)/2))**, with S the Sharpe ratio (0.45).
+
+| Kelly ahead of… | after 5 years | 10 | 20 | 50 | years for 90% | years for 95% |
+|---|---|---|---|---|---|---|
+| half Kelly | 60% | 64% | 69% | 79% | 129 | 213 |
+| holding NIFTY 1× | 63% | 67% | 74% | 84% | 80 | 132 |
+
+- **Kelly is the fastest-growing bet only in the long run, and the long run is very long:** after 20 years
+  Kelly was still behind half Kelly 31% of the time (simulated: 30% of 2,000 paths, using the same market
+  shocks for each bet size).
+
+<table><tr>
+<td><a href="docs/img/dd_depth.png"><picture><source media="(prefers-reduced-motion: reduce)" srcset="docs/img/dd_depth.png"><img src="docs/img/dd_depth.gif" alt="Share of simulated 20-year paths that fell 30, 50 and 70 percent from a peak, by bet size"></picture></a></td>
+<td><a href="docs/img/dd_nifty.png"><picture><source media="(prefers-reduced-motion: reduce)" srcset="docs/img/dd_nifty.png"><img src="docs/img/dd_nifty.gif" alt="NIFTY drawdowns since 2009 for holding 1x, half Kelly and hindsight Kelly"></picture></a></td>
+</tr></table>
+
+| 2,000 simulated 20-year paths | ¼ Kelly | ½ Kelly | hold 1× | Kelly | 1.5× Kelly |
+|---|---|---|---|---|---|
+| fell 50% or more from a peak | 0% | 28% | 3% | **100%** | 100% |
+| fell 70% or more | 0% | 1% | 0% | **70%** | 99% |
+| median worst fall | −20% | −44% | −32% | −76% | −92% |
+| median longest time below a peak | 2.5 years | 3.8 | 3.2 | 5.9 | 8.0 |
+| median growth a year | 11.0% | 14.2% | 12.6% | 16.8% | 14.4% |
+
+- **The price of the extra growth (left):** Kelly added 2.6 points a year over half Kelly at the median, and
+  every Kelly path lost half its peak value at least once; 70% lost more than two-thirds.
+- **On NIFTY's actual path (right):** at the hindsight Kelly fraction of 2.74, daily rebalanced with
+  borrowing at 6.5%, the worst fall was −75% (23 March 2020) against −47% at half Kelly and −36% holding 1×.
+  The longest spells below a previous peak were 3.8, 3.5 and 3.0 years.
+
 ## Quick start
 
 ```bash
 uv sync
 uv run python scripts/fetch_data.py         # Yahoo Finance -> data/prices.parquet
-uv run ks report bets                       # also: stock, estimation; charts -> out/
+uv run ks report bets                       # also: stock, estimation, drawdown
 uv run python scripts/build_site.py         # simulator -> site/index.html
 uv run pytest
 ```
@@ -154,6 +191,8 @@ uv run pytest
   realised growth of a daily-rebalanced levered position, and rolling Kelly estimates.
 - `src/ks/estimation.py`: the best multiple of an estimated Kelly fraction, its expected growth, a Monte
   Carlo check, and a monthly walk-forward that sizes from past data only.
+- `src/ks/drawdown.py`: drawdowns, longest time below a peak, the chance one bet size is ahead of
+  another after T years (and the years needed for a given confidence), and simulated wealth paths.
 - `src/ks/kelly.js`, `simulator.html`, `stock.html`: the same in the browser with a seeded generator; a test runs them
   through Node against Python.
 - `src/ks/data.py`: Yahoo prices for today's NIFTY 50, the index and two ETFs since 2007, with known errors

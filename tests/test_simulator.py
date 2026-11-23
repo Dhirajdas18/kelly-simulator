@@ -59,3 +59,11 @@ def test_browser_optimal_multiple_matches_python():
                " m.optimalMultiple(0.3, 17.9)]")
     assert js == pytest.approx([optimal_multiple(0.45, 5), optimal_multiple(-0.2, 3),
                                 optimal_multiple(0.3, 17.9)], rel=1e-12)
+
+
+def test_browser_years_to_confidence_matches_python():
+    from ks.drawdown import years_to_confidence
+
+    js = _node("[m.yearsToConfidence(1, 0.5, 0.45), m.yearsToConfidence(1, 0.365, 0.3)]")
+    assert js == pytest.approx([years_to_confidence(1, 0.5, 0.45, 0.95),
+                                years_to_confidence(1, 0.365, 0.3, 0.95)], rel=1e-6)
